@@ -21,4 +21,4 @@ jobs:
       run: |
         npm install
 
-        npx angular-cli-ghpages --dir=dist/whatsmymotivation/browser --cname=whatsmymotivation.today
+        npx angular-cli-ghpages --cname=whatsmymotivation.today
