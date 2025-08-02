@@ -1,0 +1,25 @@
+
+<app-confetti [imageFilenames]="['confetti.png', 'crying_emoji.png']"></app-confetti>
+
+<div style="position:absolute; top: 1%; left: 1%; z-index: 9;color: white; font-size: 16px; display: inline-flex">
+  <div>Lifetime rolls: {{lifetimeRolls}}</div>&nbsp;|&nbsp;
+  <div>Session rolls: {{rollsThisSession}}</div>&nbsp;|&nbsp;
+  <div>Die Value: {{currentDieValue}}</div>
+</div>
+<div style="position:absolute; top: 1%; right: 1%; z-index: 16;color: white; font-size: 20px; display: inline-flex">
+  <button (click)="rollDice()" [disabled]="disableButton">Roll for motivation</button>
+</div>
+
+<div id="dice-box"></div>
+
+<div class="text-container">
+  <ng-container *ngIf="showText">
+    {{text}}
+  </ng-container>
+</div>
+
+<div class="img-container">
+  <img [src]="'assets/Motivation_Box.png'" alt="">
+</div>
+
+
