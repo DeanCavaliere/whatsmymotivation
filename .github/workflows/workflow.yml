@@ -20,6 +20,5 @@ jobs:
         GH_TOKEN: ${{ secrets.GH_TOKEN }}
       run: |
         npm install
-        npm run build -- --configuration production
-        npm run ng -- deploy --cname=whatsmymotivation.today --name="DeanCavaliere" --email=deancaval@gmail.com
+        npm run ng -- deploy --dir=dist/whatsmymotivation --cname=whatsmymotivation.today --name="DeanCavaliere" --email=deancaval@gmail.com
 
