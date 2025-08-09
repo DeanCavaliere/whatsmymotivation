@@ -1,5 +1,5 @@
 
-<app-confetti [imageFilenames]="['confetti.png', 'crying_emoji.png']"></app-confetti>
+<app-confetti style="width: 100%; height: 100%" [imageFilenames]="['red_confetti.png', 'yellow_confetti.png', 'blue_confetti.png', 'green_confetti.png', 'crying_emoji.png']"></app-confetti>
 
 <div style="position:absolute; top: 1%; left: 1%; z-index: 9;color: white; font-size: 16px; display: inline-flex">
   <div>Lifetime rolls: {{lifetimeRolls}}</div>&nbsp;|&nbsp;
@@ -19,7 +19,9 @@
 </div>
 
 <div class="img-container">
-  <img [src]="'assets/Motivation_Box.png'" alt="">
+  <img [src]="'assets/Motivation_Box_Felt.png'" alt="" style="z-index: 2">
+  <img [src]="'assets/Motivation_Box_Wood.png'" alt="" style="z-index: 3">
+  <img [src]="'assets/Motivation_Text.png'" alt="" style="z-index: 4; object-fit: contain;">
 </div>
 
 

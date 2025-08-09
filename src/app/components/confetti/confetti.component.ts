@@ -34,7 +34,7 @@ export class ConfettiComponent implements AfterViewInit, OnDestroy {
 
   /** Size range in pixels */
   @Input() minSize = 30;
-  @Input() maxSize = 80;
+  @Input() maxSize = 60;
 
   private ctx!: CanvasRenderingContext2D;
   private bills: any[] = [];
@@ -58,6 +58,7 @@ export class ConfettiComponent implements AfterViewInit, OnDestroy {
 
     this.configService.triggerConfettiObservable.subscribe(imageUrls => {
       console.log('triggerConfettiObservable', imageUrls);
+      this.resizeCanvas();
 
       this.startRain(imageUrls);
       this.stopTimeoutId = setTimeout(() => {
@@ -115,7 +116,7 @@ export class ConfettiComponent implements AfterViewInit, OnDestroy {
       this.bills.push({
         x: Math.random() * canvas.width,
         y: Math.random() * -canvas.height,
-        speed: 2 + Math.random() * 3,
+        speed: 3 + Math.random() * 3,
         rotation: Math.random() * 360,
         rotationSpeed: 1 + Math.random() * 3,
         image,

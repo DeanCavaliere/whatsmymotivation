@@ -24,10 +24,17 @@ export class AppComponent implements OnInit, AfterViewInit {
   }
 
   constructor(private cdRef: ChangeDetectorRef, private confettiService: ConfettiService) {
-    this.lifetimeRolls = (localStorage.getItem('lifetimeRolls') ?? 0) as number;
   }
 
+  //TODO:
+  // Update confetti and sad pngs
+  // lifetimeRolls doesnt consistently load on init?
+  // perhaps make felt table png scale with width down to a certain size
+  //    -> make the text 'whats my motivation today' a transparent png too?
+
   ngOnInit() {
+    this.lifetimeRolls = (localStorage.getItem('lifetimeRolls') ?? 0) as number;
+
     this.keydownSubject.pipe(
       throttleTime(5000) // Adjust debounce time (in milliseconds) as needed
     ).subscribe(event => {
@@ -63,13 +70,13 @@ export class AppComponent implements OnInit, AfterViewInit {
         this.confettiService.triggerConfetti(['crying_emoji.png']);
       } else if (dieValue >= 20) {
         this.text = 'Critical success! Carpe diem!';
-        this.confettiService.triggerConfetti(['confetti.png']);
+        this.confettiService.triggerConfetti(['red_confetti.png', 'blue_confetti.png', 'green_confetti.png','yellow_confetti.png']);
       } else if (dieValue <= 5) {
         this.text = 'You\'re going to be very unmotivated today...';
         this.confettiService.triggerConfetti(['crying_emoji.png']);
       } else if (dieValue >= 15) {
         this.text = 'You\'re gonna be very productive today!';
-        this.confettiService.triggerConfetti(['confetti.png']);
+        this.confettiService.triggerConfetti(['red_confetti.png', 'blue_confetti.png', 'green_confetti.png','yellow_confetti.png']);
       } else if (dieValue >= 9 && dieValue <= 11) {
         this.text = 'Today is going to be mid.';
       } else if (dieValue < 9) {
