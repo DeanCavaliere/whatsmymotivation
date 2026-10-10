@@ -25,9 +25,10 @@ const SITE_URL = 'https://whatsmymotivation.today';
 const CHART = {width: 400, height: 120, gap: 2, barWidth: 18};
 
 @Component({
-  selector: 'app-root',
-  templateUrl: './app.component.html',
-  styleUrls: ['./app.component.css']
+    selector: 'app-root',
+    templateUrl: './app.component.html',
+    styleUrls: ['./app.component.css'],
+    standalone: false
 })
 export class AppComponent implements AfterViewInit, OnDestroy {
   @ViewChild('diceBox', {static: true}) diceBoxRef!: ElementRef<HTMLElement>;

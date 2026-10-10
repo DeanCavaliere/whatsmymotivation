@@ -20,9 +20,9 @@ const COLORS = ['#ef1d27', '#009ee3', '#1f9c48', '#ffcd06'];
 const TEAR_IMAGE = 'assets/img/confetti/crying.webp';
 
 @Component({
-  selector: 'app-confetti',
-  template: '<canvas #canvas aria-hidden="true"></canvas>',
-  styles: [`
+    selector: 'app-confetti',
+    template: '<canvas #canvas aria-hidden="true"></canvas>',
+    styles: [`
     canvas {
       position: fixed;
       inset: 0;
@@ -31,7 +31,8 @@ const TEAR_IMAGE = 'assets/img/confetti/crying.webp';
       pointer-events: none;
       z-index: 50;
     }
-  `]
+  `],
+    standalone: false
 })
 export class ConfettiComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvas', {static: true}) canvasRef!: ElementRef<HTMLCanvasElement>;
