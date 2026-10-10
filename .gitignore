@@ -7,6 +7,8 @@
 /bazel-out
 
 # Node
+# @3d-dice/dice-box's postinstall copies its assets here; the build serves them from node_modules instead.
+/public/
 /node_modules
 npm-debug.log
 yarn-error.log
