@@ -19,9 +19,11 @@
 
     <div class="controls">
       <div class="segmented" role="radiogroup" aria-label="Roll mode">
-        <button *ngFor="let m of modes" type="button" role="radio"
-                [attr.aria-checked]="mode === m.value" [title]="m.hint"
-                [disabled]="rolling" (click)="setMode(m.value)">{{ m.label }}</button>
+        @for (m of modes; track m.value) {
+          <button type="button" role="radio"
+            [attr.aria-checked]="mode === m.value" [title]="m.hint"
+          [disabled]="rolling" (click)="setMode(m.value)">{{ m.label }}</button>
+        }
       </div>
       <button type="button" class="btn btn-ghost" (click)="openStats()" aria-haspopup="dialog">Stats</button>
       <button type="button" class="btn btn-primary" (click)="roll()" [disabled]="!ready || rolling">
@@ -42,14 +44,18 @@
     </svg>
 
     <section class="result" aria-live="polite">
-      <ng-container *ngIf="result as r">
+      @if (result; as r) {
         <div class="result-label">{{ resultLabel(r) }}</div>
         <div class="result-value" [attr.data-tier]="r.verdict.tier">{{ r.value }}</div>
-        <div class="result-dropped" *ngIf="r.dropped !== null">dropped {{ r.dropped }}</div>
+        @if (r.dropped !== null) {
+          <div class="result-dropped">dropped {{ r.dropped }}</div>
+        }
         <p class="result-message">{{ r.verdict.message }}</p>
         <button type="button" class="btn btn-ghost btn-small" (click)="share()">Share</button>
-      </ng-container>
-      <p class="result-status" *ngIf="!ready">Setting up the table…</p>
+      }
+      @if (!ready) {
+        <p class="result-status">Setting up the table…</p>
+      }
     </section>
 
     <div #diceBox id="dice-box" class="dice-box"></div>
@@ -90,43 +96,48 @@
       </div>
     </dl>
 
-    <section *ngIf="summary.trackedRolls > 0; else noRolls">
-      <h3>Roll distribution</h3>
-      <svg class="chart" [attr.viewBox]="'0 -4 ' + chart.width + ' ' + (chart.height + 22)" role="img"
-           [attr.aria-label]="'Bar chart of how often each face from 1 to 20 was rolled'"
-           (mouseleave)="hoveredBar = null">
-        <line class="chart-baseline" x1="0" [attr.x2]="chart.width - chart.gap" [attr.y1]="chart.height" [attr.y2]="chart.height"/>
-        <g *ngFor="let bar of bars">
-          <rect class="chart-bar" [class.is-hovered]="hoveredBar === bar"
+    @if (summary.trackedRolls > 0) {
+      <section>
+        <h3>Roll distribution</h3>
+        <svg class="chart" [attr.viewBox]="'0 -4 ' + chart.width + ' ' + (chart.height + 22)" role="img"
+          [attr.aria-label]="'Bar chart of how often each face from 1 to 20 was rolled'"
+          (mouseleave)="hoveredBar = null">
+          <line class="chart-baseline" x1="0" [attr.x2]="chart.width - chart.gap" [attr.y1]="chart.height" [attr.y2]="chart.height"/>
+          @for (bar of bars; track bar.face) {
+            <g>
+              <rect class="chart-bar" [class.is-hovered]="hoveredBar === bar"
                 [attr.x]="bar.x" [attr.y]="bar.y" [attr.width]="chart.barWidth" [attr.height]="bar.height"
                 rx="3"/>
-          <!-- Taller-than-the-mark hit target -->
-          <rect class="chart-hit" [attr.x]="bar.x - chart.gap / 2" y="0" [attr.width]="chart.barWidth + chart.gap"
+              <!-- Taller-than-the-mark hit target -->
+              <rect class="chart-hit" [attr.x]="bar.x - chart.gap / 2" y="0" [attr.width]="chart.barWidth + chart.gap"
                 [attr.height]="chart.height + 22" (mouseenter)="hoveredBar = bar">
-            <title>{{ bar.face }}: rolled {{ bar.count }} {{ bar.count === 1 ? 'time' : 'times' }}</title>
-          </rect>
-          <text *ngIf="bar.face === 1 || bar.face % 5 === 0" class="chart-tick"
+                <title>{{ bar.face }}: rolled {{ bar.count }} {{ bar.count === 1 ? 'time' : 'times' }}</title>
+              </rect>
+              @if (bar.face === 1 || bar.face % 5 === 0) {
+                <text class="chart-tick"
                 [attr.x]="bar.x + chart.barWidth / 2" [attr.y]="chart.height + 16">{{ bar.face }}</text>
-        </g>
-      </svg>
-      <p class="chart-readout">
-        <ng-container *ngIf="hoveredBar; else readoutHint">
-          Rolled a <strong>{{ hoveredBar.face }}</strong> {{ hoveredBar.count }} {{ hoveredBar.count === 1 ? 'time' : 'times' }}
-        </ng-container>
-        <ng-template #readoutHint>
-          Based on {{ summary.trackedRolls }} tracked {{ summary.trackedRolls === 1 ? 'roll' : 'rolls' }}. Hover a bar for details.
-        </ng-template>
-      </p>
-
-      <h3>Recent rolls</h3>
-      <ol class="history">
-        <li *ngFor="let h of stats.history" [attr.data-tier]="tierOf(h.value)"
+              }
+            </g>
+          }
+        </svg>
+        <p class="chart-readout">
+          @if (hoveredBar) {
+            Rolled a <strong>{{ hoveredBar.face }}</strong> {{ hoveredBar.count }} {{ hoveredBar.count === 1 ? 'time' : 'times' }}
+          } @else {
+            Based on {{ summary.trackedRolls }} tracked {{ summary.trackedRolls === 1 ? 'roll' : 'rolls' }}. Hover a bar for details.
+          }
+        </p>
+        <h3>Recent rolls</h3>
+        <ol class="history">
+          @for (h of stats.history; track $index) {
+            <li [attr.data-tier]="tierOf(h.value)"
             [title]="(h.at | date:'medium') + (h.mode === 'normal' ? '' : ' · ' + h.mode)">{{ h.value }}</li>
-      </ol>
-    </section>
-    <ng-template #noRolls>
+          }
+        </ol>
+      </section>
+    } @else {
       <p class="empty">No tracked rolls yet. Close this and roll the die!</p>
-    </ng-template>
+    }
 
     <footer class="stats-footer">
       <button type="button" class="btn btn-danger btn-small" (click)="resetStats()">
@@ -136,4 +147,6 @@
   </div>
 </dialog>
 
-<div class="toast" *ngIf="toast" role="status">{{ toast }}</div>
+@if (toast) {
+  <div class="toast" role="status">{{ toast }}</div>
+}
