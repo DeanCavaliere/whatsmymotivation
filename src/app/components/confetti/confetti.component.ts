@@ -1,4 +1,4 @@
-import {AfterViewInit, Component, ElementRef, Input, NgZone, OnDestroy, ViewChild} from '@angular/core';
+import {AfterViewInit, Component, ElementRef, Input, NgZone, OnDestroy, ViewChild, ChangeDetectionStrategy} from '@angular/core';
 import {Subscription} from 'rxjs';
 import {ConfettiKind, ConfettiService} from './confetti.service';
 
@@ -32,6 +32,7 @@ const TEAR_IMAGE = 'assets/img/confetti/crying.webp';
       z-index: 50;
     }
   `],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class ConfettiComponent implements AfterViewInit, OnDestroy {

@@ -1,4 +1,4 @@
-import {AfterViewInit, Component, ElementRef, HostListener, NgZone, OnDestroy, ViewChild} from '@angular/core';
+import {AfterViewInit, Component, ElementRef, HostListener, NgZone, OnDestroy, ViewChild, ChangeDetectionStrategy} from '@angular/core';
 import {ConfettiService} from './components/confetti/confetti.service';
 import {DiceService} from './dice.service';
 import {keptValue, RollMode, Tier, tierFor, Verdict, verdictFor} from './motivation';
@@ -28,6 +28,7 @@ const CHART = {width: 400, height: 120, gap: 2, barWidth: 18};
     selector: 'app-root',
     templateUrl: './app.component.html',
     styleUrls: ['./app.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class AppComponent implements AfterViewInit, OnDestroy {
