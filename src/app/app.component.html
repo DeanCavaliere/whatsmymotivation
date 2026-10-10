@@ -1,27 +1,139 @@
+<app-confetti></app-confetti>
 
-<app-confetti style="width: 100%; height: 100%" [imageFilenames]="['red_confetti.png', 'yellow_confetti.png', 'blue_confetti.png', 'green_confetti.png', 'crying_emoji.png']"></app-confetti>
+<div class="app">
+  <header class="topbar">
+    <dl class="hud">
+      <div>
+        <dt>Today</dt>
+        <dd>{{ today ? today.value : '—' }}</dd>
+      </div>
+      <div>
+        <dt>Session</dt>
+        <dd>{{ sessionRolls }}</dd>
+      </div>
+      <div class="hud-optional">
+        <dt>Lifetime</dt>
+        <dd>{{ stats.lifetimeRolls }}</dd>
+      </div>
+    </dl>
 
-<div style="position:absolute; top: 1%; left: 1%; z-index: 9;color: white; font-size: 16px; display: inline-flex;overflow: hidden;  line-break: auto;  word-break: break-word;  text-wrap: auto;  width: 70%;">
-  <div>Lifetime rolls: {{lifetimeRolls}}</div>&nbsp;|&nbsp;
-  <div>Session rolls: {{rollsThisSession}}</div>&nbsp;|&nbsp;
-  <div>Die Value: {{currentDieValue}}</div>
+    <div class="controls">
+      <div class="segmented" role="radiogroup" aria-label="Roll mode">
+        <button *ngFor="let m of modes" type="button" role="radio"
+                [attr.aria-checked]="mode === m.value" [title]="m.hint"
+                [disabled]="rolling" (click)="setMode(m.value)">{{ m.label }}</button>
+      </div>
+      <button type="button" class="btn btn-ghost" (click)="openStats()" aria-haspopup="dialog">Stats</button>
+      <button type="button" class="btn btn-primary" (click)="roll()" [disabled]="!ready || rolling">
+        {{ rollLabel }}
+      </button>
+    </div>
+  </header>
+
+  <main class="table" (click)="onTableClick($event)">
+    <svg class="table-text" [class.is-dimmed]="result" viewBox="0 0 1000 1000" aria-hidden="true">
+      <defs>
+        <path id="arc-top" d="M 190 500 A 310 310 0 0 1 810 500"/>
+        <path id="arc-bottom" d="M 150 500 A 350 350 0 0 0 850 500"/>
+      </defs>
+      <text><textPath href="#arc-top" startOffset="50%">What's My Motivation Today?</textPath></text>
+      <text class="hint-keyboard"><textPath href="#arc-bottom" startOffset="50%">Press Space to Roll for Motivation</textPath></text>
+      <text class="hint-touch"><textPath href="#arc-bottom" startOffset="50%">Tap the Table to Roll for Motivation</textPath></text>
+    </svg>
+
+    <section class="result" aria-live="polite">
+      <ng-container *ngIf="result as r">
+        <div class="result-label">{{ resultLabel(r) }}</div>
+        <div class="result-value" [attr.data-tier]="r.verdict.tier">{{ r.value }}</div>
+        <div class="result-dropped" *ngIf="r.dropped !== null">dropped {{ r.dropped }}</div>
+        <p class="result-message">{{ r.verdict.message }}</p>
+        <button type="button" class="btn btn-ghost btn-small" (click)="share()">Share</button>
+      </ng-container>
+      <p class="result-status" *ngIf="!ready">Setting up the table…</p>
+    </section>
+
+    <div #diceBox id="dice-box" class="dice-box"></div>
+  </main>
 </div>
-<div style="position:absolute; top: 1%; right: 1%; z-index: 16;color: white; font-size: 20px; display: inline-flex">
-  <button (click)="rollDice()" [disabled]="disableButton">Roll for motivation</button>
-</div>
 
-<div id="dice-box"></div>
+<dialog #statsDialog class="stats" aria-labelledby="stats-title" (click)="onDialogClick($event)">
+  <div class="stats-body">
+    <header class="stats-header">
+      <h2 id="stats-title">Your motivation stats</h2>
+      <button type="button" class="btn btn-ghost btn-small" (click)="closeStats()" aria-label="Close stats">✕</button>
+    </header>
 
-<div class="text-container">
-  <ng-container *ngIf="showText">
-    {{text}}
-  </ng-container>
-</div>
+    <dl class="tiles">
+      <div>
+        <dt>Today's roll</dt>
+        <dd [attr.data-tier]="today ? tierOf(today.value) : null">{{ today ? today.value : '—' }}</dd>
+      </div>
+      <div>
+        <dt>Lifetime rolls</dt>
+        <dd>{{ stats.lifetimeRolls }}</dd>
+      </div>
+      <div>
+        <dt>This session</dt>
+        <dd>{{ sessionRolls }}</dd>
+      </div>
+      <div>
+        <dt>Average</dt>
+        <dd>{{ summary.average === null ? '—' : (summary.average | number:'1.1-1') }}</dd>
+      </div>
+      <div>
+        <dt>Natural 20s</dt>
+        <dd>{{ summary.nat20s }}</dd>
+      </div>
+      <div>
+        <dt>Natural 1s</dt>
+        <dd>{{ summary.nat1s }}</dd>
+      </div>
+    </dl>
 
-<div class="img-container">
-  <img [src]="'assets/Motivation_Box_Felt.png'" alt="" style="z-index: 2">
-  <img [src]="'assets/Motivation_Box_Wood.png'" alt="" style="z-index: 3">
-  <img [src]="'assets/Motivation_Text.png'" alt="" style="z-index: 4; object-fit: contain;">
-</div>
+    <section *ngIf="summary.trackedRolls > 0; else noRolls">
+      <h3>Roll distribution</h3>
+      <svg class="chart" [attr.viewBox]="'0 -4 ' + chart.width + ' ' + (chart.height + 22)" role="img"
+           [attr.aria-label]="'Bar chart of how often each face from 1 to 20 was rolled'"
+           (mouseleave)="hoveredBar = null">
+        <line class="chart-baseline" x1="0" [attr.x2]="chart.width - chart.gap" [attr.y1]="chart.height" [attr.y2]="chart.height"/>
+        <g *ngFor="let bar of bars">
+          <rect class="chart-bar" [class.is-hovered]="hoveredBar === bar"
+                [attr.x]="bar.x" [attr.y]="bar.y" [attr.width]="chart.barWidth" [attr.height]="bar.height"
+                rx="3"/>
+          <!-- Taller-than-the-mark hit target -->
+          <rect class="chart-hit" [attr.x]="bar.x - chart.gap / 2" y="0" [attr.width]="chart.barWidth + chart.gap"
+                [attr.height]="chart.height + 22" (mouseenter)="hoveredBar = bar">
+            <title>{{ bar.face }}: rolled {{ bar.count }} {{ bar.count === 1 ? 'time' : 'times' }}</title>
+          </rect>
+          <text *ngIf="bar.face === 1 || bar.face % 5 === 0" class="chart-tick"
+                [attr.x]="bar.x + chart.barWidth / 2" [attr.y]="chart.height + 16">{{ bar.face }}</text>
+        </g>
+      </svg>
+      <p class="chart-readout">
+        <ng-container *ngIf="hoveredBar; else readoutHint">
+          Rolled a <strong>{{ hoveredBar.face }}</strong> {{ hoveredBar.count }} {{ hoveredBar.count === 1 ? 'time' : 'times' }}
+        </ng-container>
+        <ng-template #readoutHint>
+          Based on {{ summary.trackedRolls }} tracked {{ summary.trackedRolls === 1 ? 'roll' : 'rolls' }}. Hover a bar for details.
+        </ng-template>
+      </p>
 
+      <h3>Recent rolls</h3>
+      <ol class="history">
+        <li *ngFor="let h of stats.history" [attr.data-tier]="tierOf(h.value)"
+            [title]="(h.at | date:'medium') + (h.mode === 'normal' ? '' : ' · ' + h.mode)">{{ h.value }}</li>
+      </ol>
+    </section>
+    <ng-template #noRolls>
+      <p class="empty">No tracked rolls yet. Close this and roll the die!</p>
+    </ng-template>
 
+    <footer class="stats-footer">
+      <button type="button" class="btn btn-danger btn-small" (click)="resetStats()">
+        {{ confirmingReset ? 'Click again to erase everything' : 'Reset stats' }}
+      </button>
+    </footer>
+  </div>
+</dialog>
+
+<div class="toast" *ngIf="toast" role="status">{{ toast }}</div>

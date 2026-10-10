@@ -1,6 +1,9 @@
 name: Deploy to GitHub Pages via angular-cli-ghpages
 
-on: [push]
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
@@ -14,10 +17,11 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: 18.x
+        cache: npm
 
     - name: Prepare and deploy
       env:
         GH_TOKEN: ${{ secrets.GH_TOKEN }}
       run: |
-        npm install
+        npm ci
         npm run ng -- deploy --dir=dist/whatsmymotivation --cname=whatsmymotivation.today --name="DeanCavaliere" --email=deancaval@gmail.com --repo="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"

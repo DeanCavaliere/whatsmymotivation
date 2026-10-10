@@ -2,9 +2,7 @@ import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 
 import { AppComponent } from './app.component';
-import {ConfettiComponent} from "./components/confetti/confetti.component";
-import {NgOptimizedImage} from "@angular/common";
-import {ConfettiService} from "./components/confetti/confetti.service";
+import { ConfettiComponent } from './components/confetti/confetti.component';
 
 @NgModule({
   declarations: [
@@ -13,9 +11,7 @@ import {ConfettiService} from "./components/confetti/confetti.service";
   ],
   imports: [
     BrowserModule,
-    NgOptimizedImage,
   ],
-  providers: [ConfettiService],
   bootstrap: [AppComponent]
 })
 export class AppModule { }

@@ -1,14 +1,14 @@
-import {Observable, Subject} from "rxjs";
+import {Injectable} from '@angular/core';
+import {Subject} from 'rxjs';
 
+export type ConfettiKind = 'confetti' | 'tears';
+
+@Injectable({providedIn: 'root'})
 export class ConfettiService {
-  private triggerConfettiSubject = new Subject<string[]>();
-  public triggerConfettiObservable = new Observable<string[]>();
+  private triggerSubject = new Subject<ConfettiKind>();
+  readonly trigger$ = this.triggerSubject.asObservable();
 
-  constructor() {
-    this.triggerConfettiObservable = this.triggerConfettiSubject.asObservable()
-  }
-
-  public triggerConfetti(fileNames: ('red_confetti.png' | 'yellow_confetti.png' | 'blue_confetti.png' | 'green_confetti.png' | "crying_emoji.png")[]): void {
-    this.triggerConfettiSubject.next(fileNames);
+  trigger(kind: ConfettiKind): void {
+    this.triggerSubject.next(kind);
   }
 }

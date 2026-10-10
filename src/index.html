@@ -4,10 +4,30 @@
   <meta charset="utf-8">
   <title>What's My Motivation Today?</title>
   <base href="/">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Roll a d20 to find out how motivated you'll be today. Natural 20? Carpe diem. Natural 1? Back to bed.">
+  <meta name="theme-color" content="#17110c">
+  <meta property="og:title" content="What's My Motivation Today?">
+  <meta property="og:description" content="Roll a d20 to find out how motivated you'll be today.">
+  <meta property="og:url" content="https://whatsmymotivation.today">
+  <meta property="og:type" content="website">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
+
+  <!-- The table artwork is the first thing on screen; fetch it alongside the JS. -->
+  <link rel="preload" as="image" href="assets/img/felt.webp" type="image/webp" fetchpriority="high">
+  <link rel="preload" as="image" href="assets/img/frame.webp" type="image/webp" fetchpriority="high">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@500;600;700&display=swap">
+
+  <style>
+    /* Paint the table colors before the app bundle loads. */
+    html, body { margin: 0; height: 100%; background: #17110c; }
+  </style>
 </head>
 <body>
   <app-root></app-root>
+  <noscript>What's My Motivation Today needs JavaScript to roll the dice.</noscript>
 </body>
 </html>

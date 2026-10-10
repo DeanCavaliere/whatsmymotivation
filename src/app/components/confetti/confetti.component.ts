@@ -1,194 +1,171 @@
-import {
-  AfterViewInit,
-  Component,
-  ElementRef,
-  HostListener, Input, OnDestroy,
-  ViewChild,
-} from '@angular/core';
-import {ConfettiService} from "./confetti.service";
+import {AfterViewInit, Component, ElementRef, Input, NgZone, OnDestroy, ViewChild} from '@angular/core';
+import {Subscription} from 'rxjs';
+import {ConfettiKind, ConfettiService} from './confetti.service';
+
+interface Piece {
+  x: number;
+  y: number;
+  /** Pixels per second. */
+  speed: number;
+  drift: number;
+  rotation: number;
+  /** Degrees per second. */
+  rotationSpeed: number;
+  width: number;
+  height: number;
+  color: string | null;
+}
+
+const COLORS = ['#ef1d27', '#009ee3', '#1f9c48', '#ffcd06'];
+const TEAR_IMAGE = 'assets/img/confetti/crying.webp';
 
 @Component({
   selector: 'app-confetti',
-  template: '<canvas #canvas class="money-canvas"></canvas>',
+  template: '<canvas #canvas aria-hidden="true"></canvas>',
   styles: [`
-    .money-canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      bottom: 0;
-      right: 0;
+    canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
       pointer-events: none;
-      z-index: 9999;
-      overflow: hidden;
+      z-index: 50;
     }
   `]
 })
 export class ConfettiComponent implements AfterViewInit, OnDestroy {
-  @ViewChild('canvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('canvas', {static: true}) canvasRef!: ElementRef<HTMLCanvasElement>;
 
-  /** Duration of the animation in milliseconds */
-  @Input() duration: number = 3000;
+  /** How long pieces keep falling before fading, in milliseconds. */
+  @Input() duration = 3000;
+  @Input() fadeDuration = 1000;
+  @Input() count = 40;
 
-  /** Image filenames (relative to /assets/confetti/) */
-  @Input() imageFilenames: string[] = ['confetti.png']; // , 'coin.png', 'cash.png'
+  private ctx: CanvasRenderingContext2D | null = null;
+  private pieces: Piece[] = [];
+  private tearImage: HTMLImageElement | null = null;
+  private frameId = 0;
+  private startTime = 0;
+  private lastTime = 0;
+  private subscription?: Subscription;
+  private reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
 
-  /** Size range in pixels */
-  @Input() minSize = 30;
-  @Input() maxSize = 60;
-
-  private ctx!: CanvasRenderingContext2D;
-  private bills: any[] = [];
-  private images: HTMLImageElement[] = [];
-  private animationFrameId: number = 0;
-  private stopTimeoutId: any;
-  private fading = false;
-  private fadeStartTime = 0;
-  private fadeDuration = 1000;
-
-  constructor(private configService: ConfettiService) {
-
+  constructor(private confetti: ConfettiService, private zone: NgZone) {
   }
 
   ngAfterViewInit(): void {
-    this.ctx = this.canvasRef.nativeElement.getContext('2d')!;
-    this.resizeCanvas();
-    this.loadImages().then(() => {
-      console.log('loadImages Done',this.images.map(x => x.src));
-    });
-
-    this.configService.triggerConfettiObservable.subscribe(imageUrls => {
-      console.log('triggerConfettiObservable', imageUrls);
-      this.resizeCanvas();
-
-      this.startRain(imageUrls);
-      this.stopTimeoutId = setTimeout(() => {
-        this.beginFadeOut();
-
-        setTimeout(() => {
-          this.destroy();
-          if (this.stopTimeoutId) {
-            clearTimeout(this.stopTimeoutId);
-          }
-          this.fading = false;
-          this.fadeStartTime = 0;
-          this.fadeDuration = 1000;
-          this.animationFrameId = 0;
-        }, 1000)
-      }, this.duration);
-    })
-  }
-
-  private resizeCanvas() {
-    const canvas = this.canvasRef.nativeElement;
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-  }
-
-  private async loadImages(): Promise<void> {
-    const loadImage = (src: string): Promise<HTMLImageElement> =>
-      new Promise((resolve, reject) => {
-        const img = new Image();
-        img.src = `assets/confetti/${src}`;
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-      });
-
-    this.images = await Promise.all(this.imageFilenames.map(loadImage));
-  }
-
-  private startRain(imageUrls: string[]) {
-    const canvas = this.canvasRef.nativeElement;
-
-    for (let i = 0; i < 30; i++) {
-      const image = this.getRandomImage(imageUrls);
-      const scaleSize = this.getRandomSize();
-      const aspectRatio = image.width / image.height;
-
-      let drawWidth = scaleSize;
-      let drawHeight = scaleSize;
-
-      if (aspectRatio > 1) {
-        drawHeight = scaleSize / aspectRatio;
-      } else {
-        drawWidth = scaleSize * aspectRatio;
-      }
-
-      this.bills.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * -canvas.height,
-        speed: 3 + Math.random() * 3,
-        rotation: Math.random() * 360,
-        rotationSpeed: 1 + Math.random() * 3,
-        image,
-        width: drawWidth,
-        height: drawHeight,
-        opacity: 1
-      });
-    }
-
-    this.draw();
-  }
-
-  private draw = () => {
-    const canvas = this.canvasRef.nativeElement;
-    this.ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    const now = performance.now();
-    const fadeElapsed = now - this.fadeStartTime;
-
-    this.bills.forEach(bill => {
-      bill.y += bill.speed;
-      bill.rotation += bill.rotationSpeed;
-
-      if (bill.y > canvas.height) {
-        bill.y = -100;
-        bill.x = Math.random() * canvas.width;
-      }
-
-      if (this.fading) {
-        bill.opacity = 1 - Math.min(fadeElapsed / this.fadeDuration, 1);
-      }
-
-      this.ctx.save();
-      this.ctx.globalAlpha = bill.opacity;
-      this.ctx.translate(bill.x, bill.y);
-      this.ctx.rotate((bill.rotation * Math.PI) / 180);
-      this.ctx.drawImage(bill.image, -bill.width / 2, -bill.height / 2, bill.width, bill.height);
-      this.ctx.restore();
-    });
-
-    if (this.fading && fadeElapsed >= this.fadeDuration) {
-      this.destroy(); // fully faded
-    } else {
-      this.animationFrameId = requestAnimationFrame(this.draw);
-    }
-  };
-
-  private getRandomImage(imageUrls: string[]): HTMLImageElement {
-    let imgs = this.images.filter(image => imageUrls.find(x => image.src.includes(x)));
-    const index = Math.floor(Math.random() * imgs.length);
-    return imgs[index];
-  }
-
-  private getRandomSize(): number {
-    return this.minSize + Math.random() * (this.maxSize - this.minSize);
-  }
-
-  private beginFadeOut() {
-    this.fading = true;
-    this.fadeStartTime = performance.now();
-  }
-
-  private destroy() {
-    cancelAnimationFrame(this.animationFrameId);
-    this.bills = [];
-    this.ctx.clearRect(0, 0, this.canvasRef.nativeElement.width, this.canvasRef.nativeElement.height);
+    this.ctx = this.canvasRef.nativeElement.getContext('2d');
+    this.subscription = this.confetti.trigger$.subscribe(kind => this.zone.runOutsideAngular(() => this.start(kind)));
   }
 
   ngOnDestroy(): void {
-    this.destroy();
-    if (this.stopTimeoutId) {
-      clearTimeout(this.stopTimeoutId);
+    this.subscription?.unsubscribe();
+    this.stop();
+  }
+
+  private start(kind: ConfettiKind): void {
+    if (!this.ctx || this.reducedMotion?.matches) {
+      return;
     }
+    if (kind === 'tears' && !this.tearImage?.complete) {
+      // Loaded on first use so it never competes with the initial page load.
+      this.tearImage = new Image();
+      this.tearImage.onload = () => this.start(kind);
+      this.tearImage.src = TEAR_IMAGE;
+      return;
+    }
+
+    cancelAnimationFrame(this.frameId);
+    const {width, height} = this.resize();
+    this.pieces = Array.from({length: this.count}, () => this.createPiece(kind, width, height));
+    this.startTime = this.lastTime = performance.now();
+    this.frameId = requestAnimationFrame(this.draw);
+  }
+
+  private createPiece(kind: ConfettiKind, width: number, height: number): Piece {
+    const tears = kind === 'tears';
+    const size = tears ? 34 + Math.random() * 30 : 10 + Math.random() * 10;
+    return {
+      x: Math.random() * width,
+      y: -Math.random() * height - size,
+      speed: (tears ? 160 : 180) + Math.random() * 180,
+      drift: (Math.random() - 0.5) * 60,
+      rotation: Math.random() * 360,
+      rotationSpeed: (tears ? 40 : 120) + Math.random() * 200,
+      width: size,
+      height: tears ? size * 0.65 : size * 0.4,
+      color: tears ? null : COLORS[Math.floor(Math.random() * COLORS.length)],
+    };
+  }
+
+  /** Sizes the backing store to the device pixel ratio so pieces stay sharp. */
+  private resize(): { width: number, height: number } {
+    const canvas = this.canvasRef.nativeElement;
+    const dpr = this.dpr();
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    this.ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return {width, height};
+  }
+
+  private dpr(): number {
+    return Math.min(window.devicePixelRatio || 1, 2);
+  }
+
+  private draw = (now: number) => {
+    const ctx = this.ctx!;
+    const canvas = this.canvasRef.nativeElement;
+    let width = window.innerWidth;
+    let height = window.innerHeight;
+    if (canvas.width !== Math.round(width * this.dpr()) || canvas.height !== Math.round(height * this.dpr())) {
+      // Window resized or phone rotated mid-animation.
+      ({width, height} = this.resize());
+    }
+    // Clamp so a backgrounded tab doesn't teleport every piece on return.
+    const dt = Math.min((now - this.lastTime) / 1000, 0.05);
+    this.lastTime = now;
+
+    const elapsed = now - this.startTime;
+    const fadeProgress = Math.max(0, elapsed - this.duration) / this.fadeDuration;
+    if (fadeProgress >= 1) {
+      this.stop();
+      return;
+    }
+    const alpha = 1 - fadeProgress;
+
+    ctx.clearRect(0, 0, width, height);
+    for (const p of this.pieces) {
+      p.y += p.speed * dt;
+      p.x += p.drift * dt;
+      p.rotation += p.rotationSpeed * dt;
+      if (p.y - p.height > height) {
+        p.y = -p.height;
+        p.x = Math.random() * width;
+      }
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(p.x, p.y);
+      ctx.rotate((p.rotation * Math.PI) / 180);
+      if (p.color) {
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.width / 2, -p.height / 2, p.width, p.height);
+      } else if (this.tearImage) {
+        const h = p.width * (this.tearImage.naturalHeight / this.tearImage.naturalWidth);
+        ctx.drawImage(this.tearImage, -p.width / 2, -h / 2, p.width, h);
+      }
+      ctx.restore();
+    }
+    this.frameId = requestAnimationFrame(this.draw);
+  };
+
+  private stop(): void {
+    cancelAnimationFrame(this.frameId);
+    this.frameId = 0;
+    this.pieces = [];
+    const canvas = this.canvasRef.nativeElement;
+    this.ctx?.clearRect(0, 0, canvas.width, canvas.height);
   }
 }

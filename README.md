@@ -1,27 +1,36 @@
-# Whatsmymotivation
+# What's My Motivation Today?
 
-This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 16.0.2.
+Roll a d20 to find out how motivated you'll be today. Natural 20? Carpe diem. Natural 1? Back to bed.
 
-## Development server
+Live at [whatsmymotivation.today](https://whatsmymotivation.today).
 
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The application will automatically reload if you change any of the source files.
+## Features
 
-## Code scaffolding
+- 3D physics dice via [@3d-dice/dice-box](https://fantasticdice.games/), with a plain random roll as a fallback when WebGL isn't available
+- Normal, advantage (2d20 keep highest) and disadvantage (2d20 keep lowest) rolls
+- The first roll of each day is "today's roll"; later rolls are re-rolls
+- Stats stored in `localStorage`: lifetime/session counts, average, natural 20s and 1s, roll distribution, recent rolls
+- Share a roll (Web Share API, or copy to clipboard)
+- Roll with the button, Space/Enter, or by tapping the table
 
-Run `ng generate component component-name` to generate a new component. You can also use `ng generate directive|pipe|service|class|guard|interface|enum|module`.
+## Development
 
-## Build
+```bash
+npm install
+npm start          # dev server on http://localhost:4405
+npm test           # unit tests (Karma + Chrome)
+npm run build      # production build into dist/whatsmymotivation
+```
 
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory.
+Pushing to `master` deploys to GitHub Pages via `.github/workflows/workflow.yml`.
 
-## Running unit tests
+## Project layout
 
-Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.io).
-
-## Running end-to-end tests
-
-Run `ng e2e` to execute the end-to-end tests via a platform of your choice. To use this command, you need to first add a package that implements end-to-end testing capabilities.
-
-## Further help
-
-To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI Overview and Command Reference](https://angular.io/cli) page.
+| Path | What it is |
+| --- | --- |
+| `src/app/motivation.ts` | Pure game logic: tiers, messages, advantage/disadvantage |
+| `src/app/stats.service.ts` | Persistent stats (versioned key, legacy migration, multi-tab safe) |
+| `src/app/dice.service.ts` | dice-box wrapper: init, physics tuning, fallback |
+| `src/app/components/confetti` | Canvas confetti / tears overlay |
+| `src/assets/img` | Table artwork (WebP). The frame is drawn as a CSS 9-slice `border-image` |
+| `src/assets/dice-box` | dice-box physics (Ammo WASM) and dice theme assets |
