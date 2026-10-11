@@ -20,37 +20,169 @@
   opacity: 0.75;
 }
 
-.doodle .is-filled {
+.doodle-fills path {
   fill: var(--chalk);
   stroke: none;
 }
 
+/* A line in its own color carries it as --chalk. */
+.doodle-lines .is-tinted {
+  stroke: var(--chalk);
+}
+
+/* Solid chalk with the transparency on each layer instead, so crossing lines don't brighten where they
+   overlap, and berries and eyes sit solidly on top of the lines. */
+@supports (color: rgb(from red r g b)) {
+  .doodle {
+    stroke: rgb(from var(--chalk) r g b / 1);
+    opacity: 1;
+  }
+
+  .doodle-lines {
+    opacity: 0.5;
+  }
+
+  .doodle-lines .is-tinted {
+    stroke: rgb(from var(--chalk) r g b / 1);
+  }
+
+  /* Opaque, so no line shows through, and toned toward the felt so they don't glare. */
+  .doodle-fills path {
+    fill: color-mix(in srgb, rgb(from var(--chalk) r g b / 1) 82%, var(--felt));
+  }
+}
+
 /* Positive nudges move a doodle toward the middle of the table. */
-.doodle[data-corner="top-left"] { top: 3%; left: 3%; translate: var(--dx) var(--dy); }
-.doodle[data-corner="top-right"] { top: 3%; right: 3%; translate: calc(-1 * var(--dx)) var(--dy); }
-.doodle[data-corner="bottom-left"] { bottom: 3%; left: 3%; translate: var(--dx) calc(-1 * var(--dy)); }
-.doodle[data-corner="bottom-right"] { bottom: 3%; right: 3%; translate: calc(-1 * var(--dx)) calc(-1 * var(--dy)); }
+.doodle[data-corner="top-left"] { top: var(--inset); left: var(--inset); translate: var(--dx) var(--dy); }
+.doodle[data-corner="top-right"] { top: var(--inset); right: var(--inset); translate: calc(-1 * var(--dx)) var(--dy); }
+.doodle[data-corner="bottom-left"] { bottom: var(--inset); left: var(--inset); translate: var(--dx) calc(-1 * var(--dy)); }
+.doodle[data-corner="bottom-right"] { bottom: var(--inset); right: var(--inset); translate: calc(-1 * var(--dx)) calc(-1 * var(--dy)); }
+
+.doodles {
+  --inset: 3%;
+}
+
+/* Clear of the frost in the corners on snowy days. */
+.doodles.is-frosted {
+  --inset: 11%;
+}
 
 .doodle {
   rotate: var(--rotate);
 }
 
-/* ---------- Daily quest, under the result ---------- */
+.doodle.is-flush {
+  --inset: 0%;
+  translate: none;
+}
+
+/* Every so often the spider lets out some thread, bobs at the bottom, and climbs slowly back up. */
+.doodle-hang {
+  animation: doodle-drop 14s ease-in-out 3s infinite;
+}
+
+@keyframes doodle-drop {
+  0%, 50% { translate: 0 0; animation-timing-function: cubic-bezier(0.5, 0, 0.8, 0.6); }
+  57% { translate: 0 18px; animation-timing-function: ease-in-out; }
+  61% { translate: 0 14px; }
+  65% { translate: 0 17px; }
+  69%, 74% { translate: 0 16px; animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1); }
+  100% { translate: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .doodle-hang {
+    animation: none;
+  }
+}
+
+/* ---------- Season effects ---------- */
+
+.season-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 30%, rgba(4, 0, 10, 0.92) 100%);
+  /* Held still: breathing it alongside the spider's drop kept Firefox redrawing the table every frame,
+     roughly halving its frame rate once a roll was showing. */
+  opacity: 0.85;
+}
+
+.season-hearts {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition: opacity 300ms ease;
+}
+
+.season-hearts.is-dimmed {
+  opacity: 0.35;
+}
+
+/* Each heart rises the full height of the felt, swaying and rocking as it goes. */
+.floating-heart {
+  position: absolute;
+  bottom: 0;
+  translate: 0 100%;
+  opacity: 0;
+  animation:
+    heart-rise var(--seconds) linear var(--delay) infinite,
+    heart-sway calc(var(--seconds) / 4) ease-in-out var(--delay) infinite alternate;
+}
+
+@keyframes heart-rise {
+  0% { translate: 0 100%; opacity: 0; }
+  12% { opacity: 0.6; }
+  70% { opacity: 0.45; }
+  100% { translate: 0 -105cqh; opacity: 0; }
+}
+
+@keyframes heart-sway {
+  from { transform: translateX(calc(-1 * var(--sway))) rotate(-12deg); }
+  to { transform: translateX(var(--sway)) rotate(12deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .season-hearts {
+    display: none;
+  }
+}
+
+/* ---------- The plate under the result: the quest, what the roll earned, Share and Reroll ---------- */
+
+/* Like the Getting started card, but darker, since the table's lettering stays up underneath. Not
+   blurred: over falling snow or rain the blur had to be redone every frame, which halved Firefox's frame rate. */
+.result-plate {
+  display: grid;
+  width: min(21rem, 100%);
+  margin-top: 14px;
+  border-radius: 16px;
+  background: rgba(10, 10, 12, 0.88);
+  overflow: hidden;
+  text-align: left;
+  pointer-events: auto;
+  animation: plate-in 360ms 240ms ease-out both;
+}
+
+.result-plate > * + * {
+  border-top: 1px solid var(--line);
+}
+
+@keyframes plate-in {
+  from { translate: 0 6px; opacity: 0; }
+}
 
 .quest {
   display: grid;
-  justify-items: center;
-  gap: 6px;
-  max-width: 19em;
-  margin-top: 10px;
-  pointer-events: auto;
+  gap: 8px;
+  padding: 14px 16px 12px;
 }
 
 .quest-line {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  text-align: left;
+  gap: 10px;
   cursor: pointer;
 }
 
@@ -58,22 +190,27 @@
   display: grid;
   flex: none;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   margin: 1px 0 0;
   border: 2px solid var(--ink);
-  border-radius: 4px;
+  border-radius: 5px;
   background: rgba(0, 0, 0, 0.3);
   appearance: none;
   cursor: pointer;
 }
 
+.quest-check:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
 .quest-check:checked::after {
   content: "✓";
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1;
-  color: var(--ink);
+  color: var(--accent-ink);
 }
 
 .quest-check:focus-visible {
@@ -82,10 +219,10 @@
 }
 
 .quest-text {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
+  line-height: 1.3;
   color: var(--ink);
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
 }
 
 .quest-text small {
@@ -98,11 +235,15 @@
 }
 
 .quest.is-done .quest-text span {
+  color: var(--ink-muted);
   text-decoration: line-through;
   text-decoration-thickness: 2px;
 }
 
+/* Lined up under the quest's text, past the checkbox. */
 .quest-note {
+  justify-self: start;
+  margin-left: 26px;
   padding: 2px 6px;
   border: 0;
   border-radius: 6px;
@@ -111,18 +252,17 @@
   font: inherit;
   font-size: 14px;
   font-style: italic;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+  text-align: left;
   cursor: text;
 }
 
 .quest-note:hover {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--hover);
 }
 
 .quest-form {
   display: flex;
   gap: 6px;
-  width: 100%;
 }
 
 .quest-form input {
@@ -137,41 +277,85 @@
   font-size: 14px;
 }
 
-/* ---------- Share and Reroll: words on wide tables, icons on narrow ones ---------- */
+.result-earned {
+  display: grid;
+  gap: 4px;
+  padding: 10px 16px 12px;
+  font-size: 14px;
+  animation: earned-in 600ms 400ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.result-earned > small {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+@keyframes earned-in {
+  from { translate: 0 8px; scale: 0.95; opacity: 0; }
+}
+
+.result-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-weight: 600;
+}
+
+.result-chips li {
+  white-space: nowrap;
+}
+
+.result-star {
+  color: var(--accent);
+}
+
+.result-earned-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+/* Share and Reroll split the plate's bottom edge, like a dialog's buttons. */
+.result-actions {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+}
+
+.result-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  border: 0;
+  border-radius: 0;
+  font-size: 14px;
+}
+
+.result-actions .btn + .btn {
+  border-left: 1px solid var(--line);
+}
+
+/* The plate clips anything outside it, so the focus ring goes inside. */
+.result-actions .btn:focus-visible {
+  outline-offset: -3px;
+}
 
 .result-glyph {
-  display: none;
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
-}
-
-@container (max-width: 480px) {
-  .result-action {
-    display: grid;
-    place-items: center;
-    width: 36px;
-    height: 36px;
-    padding: 0;
-  }
-
-  .result-glyph {
-    display: block;
-  }
-
-  /* Hidden but still read out, like .visually-hidden. */
-  .result-action-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
 }
 
 /* ---------- Getting started ---------- */
@@ -215,18 +399,23 @@
 
 .tour-list li {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
 }
 
+/* A box, so it reads as a checklist. */
 .tour-list li::before {
   content: "";
   flex: none;
-  width: 12px;
-  height: 12px;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
   border: 2px solid currentColor;
-  border-radius: 50%;
-  translate: 0 1px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1;
 }
 
 .tour-list li.is-done {
@@ -239,17 +428,32 @@
 
 .tour-list li.is-done::before {
   content: "✓";
-  border: 0;
-  height: auto;
-  font-size: 14px;
-  line-height: 1;
-  translate: 0;
+  border-color: transparent;
+  background: var(--ink-muted);
+  color: var(--accent-ink);
+}
+
+/* On the card, the step the Roll button ticks off stands out, and the rest wait their turn. */
+.tour-card .tour-list li:not(.is-done, .is-next) {
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+
+.tour-list li.is-next::before {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-fill);
 }
 
 .tour-card .tour-reward {
-  color: var(--accent);
+  margin-top: 2px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-muted);
   font-size: 14px;
-  font-weight: 600;
+}
+
+.tour-star {
+  color: var(--accent);
 }
 
 .tour-skip {
@@ -285,13 +489,21 @@
   30% { scale: 1.1; }
 }
 
-/* Nudges a new player towards their first roll. */
+/* Points the tour at the Roll button: a steady glow, with a ring rippling out. */
 .btn.is-calling {
-  animation: calling 1.6s ease-in-out infinite;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 45%, transparent);
+  animation: calling 1.6s ease-out infinite;
 }
 
 @keyframes calling {
-  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 35%, transparent); }
+  from {
+    box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 45%, transparent),
+      0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent);
+  }
+  to {
+    box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 45%, transparent),
+      0 0 0 10px transparent;
+  }
 }
 
 .hud-inspiration.is-new {
@@ -308,4 +520,49 @@
   .hud-inspiration.is-new {
     animation: none;
   }
+}
+
+/* ---------- Dev chip (dev builds only; see src/dev/launcher.ts) ---------- */
+
+.dev-chip {
+  position: fixed;
+  left: max(10px, env(safe-area-inset-left));
+  bottom: max(10px, env(safe-area-inset-bottom));
+  z-index: 5;
+  padding: 4px 10px;
+  border: 1px dashed var(--accent);
+  border-radius: 999px;
+  background: rgba(10, 10, 12, 0.75);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-decoration: none;
+  opacity: 0.7;
+  transition: opacity 120ms ease;
+}
+
+.dev-chip:hover,
+.dev-chip:focus-visible {
+  opacity: 1;
+}
+
+/* Fixed width, so the chip doesn't twitch as the reading changes. */
+.dev-fps {
+  display: inline-block;
+  min-width: 5.5ch;
+  margin-left: 4px;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.dev-fps:empty {
+  display: none;
+}
+
+.dev-fps.is-slow {
+  color: var(--tier-crit-fail);
 }

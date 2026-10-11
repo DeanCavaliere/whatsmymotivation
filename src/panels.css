@@ -24,6 +24,36 @@
   padding: 20px;
 }
 
+/* One height for every tab, so switching tabs doesn't resize the dialog: the header and
+   tabs stay put, the tab's content scrolls, and the footer stays pinned. */
+.panel-fixed {
+  height: min(860px, calc(100% - 32px));
+}
+
+.panel-fixed .panel-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Bleeds to the dialog's edges so the scrollbar sits there, not over the content. Positioned
+   so visually hidden text stays inside it rather than stretching the dialog. */
+.panel-scroll {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin: 0 -20px;
+  padding: 0 20px 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.panel-fixed .panel-footer {
+  margin-top: 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
 .panel-header {
   display: flex;
   align-items: center;
@@ -78,35 +108,54 @@
   outline-offset: -2px;
 }
 
-.tiles {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  margin: 0;
-}
-
-.tiles div {
-  padding: 10px 12px;
+/* A row of small stat cells in one outlined strip. */
+.stat-strip {
+  display: flex;
+  margin: 0 0 16px;
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.03);
 }
 
-.tiles dt {
+.stat-strip div {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+}
+
+.stat-strip div + div {
+  border-left: 1px solid var(--line);
+}
+
+.stat-strip dt {
   font-size: 12px;
   color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.tiles dd {
+.stat-strip dd {
   margin: 2px 0 0;
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--tier, var(--ink));
+  color: var(--ink);
 }
 
-.tiles dd.tile-text {
-  font-size: 17px;
-  line-height: 1.7;
+.more-stats {
+  margin-top: 20px;
+  border-top: 1px solid var(--line);
+  /* Lets the fold animate to its natural height where supported. */
+  interpolate-size: allow-keywords;
+}
+
+.more-stats .accordion-body > :first-child {
+  margin-top: 4px;
+}
+
+.more-stats .accordion-body > :last-child {
+  margin-bottom: 0;
 }
 
 .chart-header {
@@ -535,6 +584,62 @@ label.die-row:has(input:focus-visible) {
   transform: translateX(20px);
 }
 
+/* Sits under the Sound switch while sound is on, as part of the same row. */
+.switch-row:has(+ .volume-row) {
+  border-bottom: none;
+}
+
+.volume-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 4px 4px 16px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* The track fills with the accent up to the thumb. */
+.volume-slider {
+  appearance: none;
+  flex: 1;
+  height: 6px;
+  margin: 0;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--accent) var(--fill), var(--line) var(--fill));
+  cursor: pointer;
+}
+
+.volume-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--accent-ink);
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.volume-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--accent-ink);
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.volume-slider:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 6px;
+}
+
+.volume-value {
+  min-width: 4ch;
+  text-align: right;
+  font-size: 13px;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 @media (forced-colors: active) {
   .switch,
   .die-row input {
@@ -556,6 +661,21 @@ label.die-row:has(input:focus-visible) {
     background: HighlightText;
   }
 
+  .volume-slider {
+    forced-color-adjust: none;
+    background: linear-gradient(to right, Highlight var(--fill), ButtonText var(--fill));
+  }
+
+  .volume-slider::-webkit-slider-thumb {
+    border-color: ButtonFace;
+    background: Highlight;
+  }
+
+  .volume-slider::-moz-range-thumb {
+    border-color: ButtonFace;
+    background: Highlight;
+  }
+
   label.die-row:has(input:checked),
   .swatch:has(input:checked) {
     outline: 2px solid Highlight;
@@ -569,10 +689,6 @@ label.die-row:has(input:focus-visible) {
 }
 
 @media (max-width: 560px) {
-  .tiles {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
   .die-row {
     grid-template-columns: 18px 1fr repeat(3, 3.6em);
     gap: 6px;

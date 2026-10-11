@@ -8,6 +8,8 @@ const TWO_DICE = [1, 2, 3].map(n => `assets/sounds/dice-throw-${n}.wav`);
 const LANDING_DELAY = 0.25;
 /** The second recording starts this long after the first, so the die seems to tumble to a stop. */
 const TUMBLE_GAP = 0.34;
+/** The volume slider's top end, as a share of each sound's own level. Halfway keeps the effects in the background. */
+const MAX_VOLUME = 0.4;
 
 /** Vibration patterns in milliseconds: buzz, pause, buzz... */
 const VIBRATIONS: Record<'land' | 'big-burst' | 'crack', number[]> = {
@@ -30,6 +32,8 @@ export class SoundService {
   readonly canVibrate = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
 
   private ctx: AudioContext | null = null;
+  private out: GainNode | null = null;
+  private level = 0.5;
   private buffers = new Map<string, Promise<AudioBuffer | null>>();
   private reducedMotion = typeof window !== 'undefined' ? window.matchMedia?.('(prefers-reduced-motion: reduce)') : undefined;
 
@@ -45,6 +49,14 @@ export class SoundService {
     }
   }
 
+  /** The player's volume, from 0 to 1. */
+  set volume(volume: number) {
+    this.level = volume;
+    if (this.out) {
+      this.out.gain.value = volume * MAX_VOLUME;
+    }
+  }
+
   /** Call from the click that throws the dice: browsers only start audio from a user gesture. */
   diceThrown(dice: 1 | 2): void {
     const ctx = this.context();
@@ -56,7 +68,7 @@ export class SoundService {
       const first = Math.floor(Math.random() * list.length);
       const second = (first + 1 + Math.floor(Math.random() * (list.length - 1))) % list.length;
       const start = ctx.currentTime + LANDING_DELAY;
-      const felt = feltFilter(ctx);
+      const felt = feltFilter(ctx, this.output(ctx));
       this.play(ctx, felt, list[first], start, 0.95 + Math.random() * 0.1, 1);
       this.play(ctx, felt, list[second], start + TUMBLE_GAP, 0.85, 0.5);
     });
@@ -67,7 +79,7 @@ export class SoundService {
     const ctx = this.context();
     if (ctx) {
       this.zone.runOutsideAngular(() => {
-        const out = masterGain(ctx);
+        const out = masterGain(ctx, this.output(ctx));
         const at = ctx.currentTime + 0.03;
         if (celebration === 'big-burst') {
           sting(ctx, out, at);
@@ -83,7 +95,7 @@ export class SoundService {
   badgeUnlocked(delay = 0): void {
     const ctx = this.context();
     if (ctx) {
-      this.zone.runOutsideAngular(() => tick(ctx, masterGain(ctx), ctx.currentTime + 0.03 + delay));
+      this.zone.runOutsideAngular(() => tick(ctx, masterGain(ctx, this.output(ctx)), ctx.currentTime + 0.03 + delay));
     }
   }
 
@@ -118,6 +130,16 @@ export class SoundService {
     }
   }
 
+  /** The one node every sound ends in, which sets the overall volume. */
+  private output(ctx: AudioContext): GainNode {
+    if (!this.out) {
+      this.out = ctx.createGain();
+      this.out.gain.value = this.level * MAX_VOLUME;
+      this.out.connect(ctx.destination);
+    }
+    return this.out;
+  }
+
   private buffer(ctx: AudioContext, url: string): Promise<AudioBuffer | null> {
     let buffer = this.buffers.get(url);
     if (!buffer) {
@@ -147,15 +169,15 @@ export class SoundService {
   }
 }
 
-function masterGain(ctx: AudioContext, gain = 0.6): GainNode {
+function masterGain(ctx: AudioContext, out: AudioNode, gain = 0.6): GainNode {
   const node = ctx.createGain();
   node.gain.value = gain;
-  node.connect(ctx.destination);
+  node.connect(out);
   return node;
 }
 
 /** Felt soaks up the highs: a gentle low-pass and a little extra low end. */
-function feltFilter(ctx: AudioContext): AudioNode {
+function feltFilter(ctx: AudioContext, out: AudioNode): AudioNode {
   const lowpass = ctx.createBiquadFilter();
   lowpass.type = 'lowpass';
   lowpass.frequency.value = 3200;
@@ -164,7 +186,7 @@ function feltFilter(ctx: AudioContext): AudioNode {
   shelf.type = 'lowshelf';
   shelf.frequency.value = 250;
   shelf.gain.value = 4;
-  lowpass.connect(shelf).connect(ctx.destination);
+  lowpass.connect(shelf).connect(out);
   return lowpass;
 }
 

@@ -11,6 +11,7 @@ import {
   ViewChild,
 } from '@angular/core';
 import {DayCondition} from '../../conditions';
+import {drawFrost} from './frost';
 
 interface Particle {
   x: number;
@@ -22,9 +23,20 @@ interface Particle {
   phase: number;
 }
 
+/** A bank of fog drifting across the fog, in table pixels. */
+interface Wisp {
+  x: number;
+  y: number;
+  width: number;
+  speed: number;
+  phase: number;
+  /** Light wisps catch the light; the rest are shade, so the fog seems to roll. */
+  light: boolean;
+}
+
 /** Fog clears itself once this much of it has been wiped away. */
 const FOG_CLEARED_AT = 0.45;
-const WIPE_RADIUS = 40;
+const WIPE_RADIUS = 46;
 
 /**
  * The day's table condition, drawn over the felt: rain, snow, lightning, motes, light and shadow
@@ -44,11 +56,19 @@ export class TableWeatherComponent implements AfterViewInit, OnChanges, OnDestro
   @ViewChild('under', {static: true}) underRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('over', {static: true}) overRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('fog', {static: true}) fogRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('wisps', {static: true}) wispsRef!: ElementRef<HTMLCanvasElement>;
 
   fogged = false;
+  /** Shows how to wipe the fog, until the first wipe. */
+  hinting = false;
   flashing = false;
 
   private particles: Particle[] = [];
+  /** Snowy days' frosted edges, drawn once per size. */
+  private frost: HTMLCanvasElement | null = null;
+  private wisps: Wisp[] = [];
+  /** One soft cloud each of light and shade, drawn once and stretched into every wisp. */
+  private wispSprites: { light: HTMLCanvasElement; shade: HTMLCanvasElement } | null = null;
   /** A lightning bolt being drawn, until `until` (a performance.now() time). */
   private bolt: { points: [number, number][]; until: number } | null = null;
   private frameId = 0;
@@ -57,7 +77,10 @@ export class TableWeatherComponent implements AfterViewInit, OnChanges, OnDestro
   private width = 0;
   private height = 0;
   private wiping = false;
+  /** Where the last wipe left off, so a quick stroke wipes a streak rather than a row of dots. */
+  private lastWipe: [number, number] | null = null;
   private wipes = 0;
+  private brush: HTMLCanvasElement | null = null;
   private flashTimer?: ReturnType<typeof setTimeout>;
   private resizeObserver?: ResizeObserver;
   private reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
@@ -118,6 +141,8 @@ export class TableWeatherComponent implements AfterViewInit, OnChanges, OnDestro
 
   onFogDown(event: PointerEvent): void {
     this.wiping = true;
+    this.hinting = false;
+    this.lastWipe = null;
     (event.target as Element).setPointerCapture?.(event.pointerId);
     this.wipe(event);
   }
@@ -130,6 +155,7 @@ export class TableWeatherComponent implements AfterViewInit, OnChanges, OnDestro
 
   onFogUp(): void {
     this.wiping = false;
+    this.lastWipe = null;
     if (this.fogged && this.fogCoverage() < 1 - FOG_CLEARED_AT) {
       this.fogged = false;
     }
@@ -142,7 +168,7 @@ export class TableWeatherComponent implements AfterViewInit, OnChanges, OnDestro
     }
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const fog = this.fogRef.nativeElement;
-    for (const canvas of [this.underRef.nativeElement, this.overRef.nativeElement, fog]) {
+    for (const canvas of [this.underRef.nativeElement, this.overRef.nativeElement, fog, this.wispsRef.nativeElement]) {
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       // The fog is read back to see how much has been wiped.
@@ -151,6 +177,7 @@ export class TableWeatherComponent implements AfterViewInit, OnChanges, OnDestro
     const first = !this.width;
     this.width = width;
     this.height = height;
+    this.frost = null;
     this.start();
     if (this.condition === 'foggy' && (first || this.fogged)) {
       this.zone.run(() => this.paintFog());
@@ -171,6 +198,14 @@ export class TableWeatherComponent implements AfterViewInit, OnChanges, OnDestro
       speed: this.condition === 'snowy' ? 18 + random() * 22 : this.condition === 'rainy' || this.condition === 'stormy' ? 380 + random() * 260 : 8 + random() * 16,
       phase: random() * 6,
     }));
+    this.wisps = this.condition === 'foggy' ? Array.from({length: 12}, (_, i) => ({
+      x: random() * (w + 400) - 200,
+      y: (i + random()) / 12 * h,
+      width: 320 + random() * 300,
+      speed: 22 + random() * 26,
+      phase: random() * 6,
+      light: i % 3 !== 0,
+    })) : [];
     if (this.condition === 'stormy' && !this.still) {
       this.scheduleFlash();
     }
@@ -190,6 +225,7 @@ export class TableWeatherComponent implements AfterViewInit, OnChanges, OnDestro
     const {width: w, height: h, condition} = this;
     under.clearRect(0, 0, w, h);
     over.clearRect(0, 0, w, h);
+    this.wispsRef.nativeElement.getContext('2d')?.clearRect(0, 0, w, h);
     const move = this.still ? 0 : dt;
 
     switch (condition) {
@@ -227,12 +263,10 @@ export class TableWeatherComponent implements AfterViewInit, OnChanges, OnDestro
         }
         break;
       case 'snowy': {
-        // The snow that has settled along the bottom of the table.
-        const drift = over.createLinearGradient(0, h - 18, 0, h);
-        drift.addColorStop(0, 'rgba(240, 245, 250, 0)');
-        drift.addColorStop(1, 'rgba(240, 245, 250, 0.55)');
-        over.fillStyle = drift;
-        over.fillRect(0, h - 18, w, 18);
+        const frost = this.frost ??= this.paintFrost();
+        if (frost) {
+          over.drawImage(frost, 0, 0, w, h);
+        }
         over.fillStyle = 'rgba(245, 248, 252, 0.85)';
         for (const p of this.particles) {
           p.y += p.speed * move;
@@ -284,6 +318,15 @@ export class TableWeatherComponent implements AfterViewInit, OnChanges, OnDestro
         under.fillRect(0, 0, w, h);
         break;
       }
+      case 'foggy':
+        // Still, the wisps would stay put over fog that's been wiped away.
+        if (this.still) {
+          return;
+        }
+        if (this.fogged) {
+          this.drawWisps(move);
+        }
+        break;
       default:
         return;
     }
@@ -291,6 +334,44 @@ export class TableWeatherComponent implements AfterViewInit, OnChanges, OnDestro
       this.frameId = requestAnimationFrame(this.draw);
     }
   };
+
+  /** Drifts the wisps along and draws them, masked to the fog that's left. */
+  private drawWisps(move: number): void {
+    const ctx = this.wispsRef.nativeElement.getContext('2d');
+    const sprites = this.wispSprites ??= {light: wispSprite('rgba(255, 255, 255, 0.7)'), shade: wispSprite('rgba(105, 115, 130, 0.38)')};
+    if (!ctx) {
+      return;
+    }
+    const {width: w, height: h} = this;
+    for (const wisp of this.wisps) {
+      wisp.x += wisp.speed * move;
+      if (wisp.x > w + wisp.width / 2) {
+        wisp.x = -wisp.width / 2;
+      }
+      // Each wisp swells and thins a little as it goes.
+      const swell = 1 + 0.12 * Math.sin(this.time * 0.4 + wisp.phase);
+      const width = wisp.width * swell;
+      const height = width * 0.38;
+      const y = wisp.y + Math.sin(this.time * 0.25 + wisp.phase) * 14;
+      ctx.drawImage(wisp.light ? sprites.light : sprites.shade, wisp.x - width / 2, y - height / 2, width, height);
+    }
+    ctx.globalCompositeOperation = 'destination-in';
+    ctx.drawImage(this.fogRef.nativeElement, 0, 0, w, h);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  private paintFrost(): HTMLCanvasElement | null {
+    const canvas = document.createElement('canvas');
+    canvas.width = this.overRef.nativeElement.width;
+    canvas.height = this.overRef.nativeElement.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      return null;
+    }
+    ctx.scale(canvas.width / this.width, canvas.height / this.height);
+    drawFrost(ctx, this.width, this.height);
+    return canvas;
+  }
 
   private scheduleFlash(): void {
     this.flashTimer = setTimeout(() => {
@@ -309,6 +390,7 @@ export class TableWeatherComponent implements AfterViewInit, OnChanges, OnDestro
     const ctx = this.fogRef.nativeElement.getContext('2d');
     if (!ctx || !this.width) {
       this.fogged = true;
+      this.hinting = true;
       return;
     }
     const {width: w, height: h} = this;
@@ -328,23 +410,33 @@ export class TableWeatherComponent implements AfterViewInit, OnChanges, OnDestro
     }
     this.wipes = 0;
     this.fogged = true;
+    this.hinting = true;
   }
 
   private wipe(event: PointerEvent): void {
     const canvas = this.fogRef.nativeElement;
     const ctx = canvas.getContext('2d');
+    const brush = this.brush ??= wipeBrush();
     if (!ctx) {
       return;
     }
     const box = canvas.getBoundingClientRect();
-    const x = event.clientX - box.left;
-    const y = event.clientY - box.top;
     ctx.globalCompositeOperation = 'destination-out';
-    const brush = ctx.createRadialGradient(x, y, 0, x, y, WIPE_RADIUS);
-    brush.addColorStop(0, 'rgba(0, 0, 0, 1)');
-    brush.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = brush;
-    ctx.fillRect(x - WIPE_RADIUS, y - WIPE_RADIUS, WIPE_RADIUS * 2, WIPE_RADIUS * 2);
+    // Every point the pointer passed since the last event, then the gaps between them filled in.
+    const coalesced = event.getCoalescedEvents?.() ?? [];
+    for (const point of coalesced.length ? coalesced : [event]) {
+      const x = point.clientX - box.left;
+      const y = point.clientY - box.top;
+      const [fromX, fromY] = this.lastWipe ?? [x, y];
+      const steps = Math.max(1, Math.ceil(Math.hypot(x - fromX, y - fromY) / (WIPE_RADIUS / 4)));
+      for (let i = 1; i <= steps; i++) {
+        const bx = fromX + (x - fromX) * i / steps;
+        const by = fromY + (y - fromY) * i / steps;
+        ctx.drawImage(brush, bx - WIPE_RADIUS, by - WIPE_RADIUS, WIPE_RADIUS * 2, WIPE_RADIUS * 2);
+      }
+      this.lastWipe = [x, y];
+    }
+    ctx.globalCompositeOperation = 'source-over';
     // Checking coverage reads pixels, so only do it every few strokes.
     if (++this.wipes % 12 === 0 && this.fogCoverage() < 1 - FOG_CLEARED_AT) {
       this.zone.run(() => this.fogged = false);
@@ -370,4 +462,47 @@ export class TableWeatherComponent implements AfterViewInit, OnChanges, OnDestro
     }
     return samples ? covered / samples : 0;
   }
+}
+
+/** A soft round brush, clear through the middle and feathered at the edge, stamped along each wipe. */
+function wipeBrush(): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    return canvas;
+  }
+  const brush = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  brush.addColorStop(0, 'rgba(0, 0, 0, 1)');
+  brush.addColorStop(0.45, 'rgba(0, 0, 0, 0.85)');
+  brush.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = brush;
+  ctx.fillRect(0, 0, 128, 128);
+  return canvas;
+}
+
+/** A soft cloud: many blurred puffs, fullest in the middle, so a stretched copy looks like a bank of fog. */
+function wispSprite(color: string): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 96;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    return canvas;
+  }
+  ctx.filter = 'blur(8px)';
+  const clear = color.replace(/[\d.]+\)$/, '0)');
+  for (let i = 0; i < 16; i++) {
+    const t = i / 15;
+    // Bigger puffs toward the middle, tapering off at both ends.
+    const r = 14 + 26 * Math.sin(Math.PI * t);
+    const x = 40 + 176 * t;
+    const y = 48 + Math.sin(i * 2.3) * 8;
+    const puff = ctx.createRadialGradient(x, y, 0, x, y, r);
+    puff.addColorStop(0, color);
+    puff.addColorStop(1, clear);
+    ctx.fillStyle = puff;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  return canvas;
 }

@@ -83,12 +83,14 @@ export interface Prefs {
   /** A season the player turned off by picking their own table or dice (see `seasonKey`). */
   seasonOff: string | null;
   sound: boolean;
+  /** How loud the sounds are, from 0 to 1. */
+  volume: number;
   /** Buzz the phone when the dice land (where the browser allows it). */
   vibration: boolean;
 }
 
 export const DEFAULT_PREFS: Prefs = {
-  table: 'classic', accent: 'copper', dice: 'gold', sides: 20, rerolls: true, quests: true, seasonal: true, seasonOff: null, sound: true, vibration: true,
+  table: 'classic', accent: 'copper', dice: 'gold', sides: 20, rerolls: true, quests: true, seasonal: true, seasonOff: null, sound: true, volume: 0.5, vibration: true,
 };
 
 export function tableTheme(id: string): TableTheme {
@@ -121,6 +123,7 @@ export class PrefsService {
       const accent = raw?.['accent'];
       const dice = raw?.['dice'];
       const sides = raw?.['sides'];
+      const volume = raw?.['volume'];
       return {
         table: TABLE_THEMES.some(t => t.id === table) ? table as string : DEFAULT_PREFS.table,
         accent: ACCENTS.some(a => a.id === accent) ? accent as string : DEFAULT_PREFS.accent,
@@ -131,6 +134,7 @@ export class PrefsService {
         seasonal: typeof raw?.['seasonal'] === 'boolean' ? raw['seasonal'] as boolean : DEFAULT_PREFS.seasonal,
         seasonOff: typeof raw?.['seasonOff'] === 'string' ? raw['seasonOff'] as string : null,
         sound: typeof raw?.['sound'] === 'boolean' ? raw['sound'] as boolean : DEFAULT_PREFS.sound,
+        volume: typeof volume === 'number' && volume >= 0 && volume <= 1 ? volume : DEFAULT_PREFS.volume,
         vibration: typeof raw?.['vibration'] === 'boolean' ? raw['vibration'] as boolean : DEFAULT_PREFS.vibration,
       };
     } catch {

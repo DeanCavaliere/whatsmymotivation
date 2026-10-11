@@ -3,6 +3,7 @@ import {AppComponent} from './app.component';
 import {DiceService} from './dice.service';
 import {DieSides, RollMode} from './motivation';
 import {DayCondition} from './conditions';
+import {SEASONS} from './seasons';
 import {addDays, KeyValueStorage, localDateKey, STATS_KEY, STATS_STORAGE, StatsService} from './stats.service';
 
 class FakeDiceService {
@@ -15,7 +16,7 @@ class FakeDiceService {
   }
 
   lastMode?: RollMode;
-  gravity = 1;
+  lowGravity = false;
 
   async roll(mode: RollMode, sides: DieSides, color?: string): Promise<number[]> {
     this.lastMode = mode;
@@ -24,8 +25,8 @@ class FakeDiceService {
     return this.next;
   }
 
-  setGravity(gravity: number): void {
-    this.gravity = gravity;
+  setLowGravity(low: boolean): void {
+    this.lowGravity = low;
   }
 }
 
@@ -239,8 +240,9 @@ describe('AppComponent', () => {
       await app.roll();
       fixture.detectChanges();
       expect(app.result!.inspiration).toEqual({reasons: ['natural'], kept: 1, first: true});
-      const pills = [...fixture.nativeElement.querySelectorAll('.result-badge')].map((p: Element) => p.textContent);
-      expect(pills.some(t => t.includes('+1 Inspiration') && t.includes('For a natural 20') && t.includes('Tap ✦ up top'))).toBe(true);
+      const earned = fixture.nativeElement.querySelector('.result-earned').textContent.replace(/\s+/g, ' ');
+      expect(earned).toContain('+1 Inspiration');
+      expect(earned).toContain('For a natural 20. Tap ✦ up top');
       // The ✦ counter shows up with the first ✦, even before Getting started is done.
       expect(fixture.nativeElement.querySelector('.hud-button').textContent).toContain('1');
     });
@@ -286,6 +288,26 @@ describe('AppComponent', () => {
       expect(JSON.parse(store.get('wmm.prefs.v1')!).sound).toBe(false);
     });
 
+    it('sets the volume, and plays a die at the new level once the slider is let go', () => {
+      const thrown = vi.spyOn(app.sound, 'diceThrown');
+      const volume = vi.spyOn(app.sound, 'volume', 'set');
+      app.setVolume(0.3);
+      expect(volume).toHaveBeenLastCalledWith(0.3);
+      expect(thrown).not.toHaveBeenCalled();
+      app.setVolume(0.8, true);
+      expect(thrown).toHaveBeenCalledWith(1);
+      expect(JSON.parse(store.get('wmm.prefs.v1')!).volume).toBe(0.8);
+    });
+
+    it('labels practice rolls apart from the day\'s roll', async () => {
+      dice.next = [12];
+      await app.roll();
+      expect(app.resultLabel(app.result!)).toBe('Today\'s roll');
+      dice.next = [5];
+      await app.roll();
+      expect(app.resultLabel(app.result!)).toBe('Practice roll');
+    });
+
     it('unlocks badges once, shows them on the table and lists them in Stats', async () => {
       const tick = vi.spyOn(app.sound, 'badgeUnlocked');
       dice.next = [1, 1];
@@ -293,7 +315,8 @@ describe('AppComponent', () => {
       await app.roll();
       fixture.detectChanges();
       expect(app.result!.badges.map(b => b.id)).toEqual(['first-roll', 'rock-bottom', 'snake-eyes']);
-      expect(fixture.nativeElement.querySelector('.result-badge').textContent).toContain('3 badges unlocked');
+      const chips = [...fixture.nativeElement.querySelectorAll('.result-chips li')].map((li: Element) => li.textContent!.trim());
+      expect(chips).toEqual(['🎲 First roll badge', '💀 Rock bottom badge', '🐍 Snake eyes badge']);
       expect(tick).toHaveBeenCalledWith(1.8);
 
       await app.roll();
@@ -380,6 +403,48 @@ describe('AppComponent', () => {
       expect(readout()).toContain('across 2 rolls on the d20');
       expect(el.querySelectorAll('.history li').length).toBe(2);
     });
+
+    it('folds the chart and rerolls under More stats, staying open across tabs', async () => {
+      await app.roll();
+      app.openStats();
+      fixture.detectChanges();
+      const el: HTMLElement = fixture.nativeElement;
+      const fold = () => el.querySelector('.more-stats') as HTMLDetailsElement;
+
+      expect(fold().open).toBe(false);
+      expect(fold().querySelector('.chart')).not.toBeNull();
+      expect(fold().textContent).toContain('Rerolls');
+
+      fold().open = true;
+      fold().dispatchEvent(new Event('toggle'));
+      (el.querySelector('#tab-all') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(fold().open).toBe(true);
+      expect(fold().textContent).not.toContain('Rerolls');
+    });
+  });
+
+  describe('the dev launcher', () => {
+    beforeEach(setup);
+
+    it('has a Dev chip that opens it in its own tab', () => {
+      const chip = fixture.nativeElement.querySelector('.dev-chip') as HTMLAnchorElement;
+      expect(chip.getAttribute('href')).toBe('/?launcher');
+      expect(chip.target).toBe('wmm-launcher');
+    });
+
+    it('opens on `, but not while typing', () => {
+      const open = vi.spyOn(window, 'open').mockReturnValue(null);
+      document.body.dispatchEvent(new KeyboardEvent('keydown', {key: '`', bubbles: true}));
+      expect(open).toHaveBeenCalledWith('/?launcher', 'wmm-launcher');
+
+      open.mockClear();
+      const input = document.createElement('input');
+      document.body.append(input);
+      input.dispatchEvent(new KeyboardEvent('keydown', {key: '`', bubbles: true}));
+      input.remove();
+      expect(open).not.toHaveBeenCalled();
+    });
   });
 
   describe('Getting started', () => {
@@ -397,7 +462,7 @@ describe('AppComponent', () => {
     it('walks a new player through a roll, the quest and a second day, then gives the first ✦', async () => {
       const card = el().querySelector('.tour-card')!;
       expect(card.textContent).toContain('Welcome to the table');
-      expect(steps(card)).toEqual(['Roll today\'s motivation', 'Finish today\'s quest', 'Come back tomorrow']);
+      expect(steps(card)).toEqual(['Roll for motivation', 'Finish today\'s quest', 'Come back tomorrow']);
       expect(el().querySelector('.hud-button')).toBeNull();
       expect(el().querySelector('.topbar .btn-primary')!.classList).toContain('is-calling');
 
@@ -420,7 +485,7 @@ describe('AppComponent', () => {
       await app.roll();
       fixture.detectChanges();
       expect(app.result!.inspiration).toEqual({reasons: ['tour'], kept: 1, first: true});
-      expect(el().querySelector('.result-badge-hint')!.textContent).toContain('Save it for a day you don\'t like');
+      expect(el().querySelector('.result-earned-hint')!.textContent).toContain('Save it for a day you don\'t like');
       expect(el().querySelector('.hud-button')!.textContent).toContain('1');
       expect(el().querySelector('.tour-pill')).toBeNull();
       expect(app.announcement).toContain('Plus 1 Inspiration');
@@ -452,7 +517,7 @@ describe('AppComponent', () => {
       fixture.detectChanges();
       const dialog = el().querySelector('dialog[aria-labelledby="tour-title"]') as HTMLDialogElement;
       expect(dialog.open).toBe(true);
-      expect(steps(dialog)).toEqual(['✓ Roll today\'s motivation', 'Finish today\'s quest', 'Come back tomorrow']);
+      expect(steps(dialog)).toEqual(['✓ Roll for motivation', 'Finish today\'s quest', 'Come back tomorrow']);
     });
 
     it('swaps the quest step for the stats when the daily quest is off', async () => {
@@ -578,7 +643,7 @@ describe('AppComponent', () => {
     it('lowers the dice\'s gravity on a low-gravity day', async () => {
       condition = 'low-gravity';
       await setup();
-      expect(dice.gravity).toBe(0.35);
+      expect(dice.lowGravity).toBe(true);
     });
   });
 
@@ -596,7 +661,7 @@ describe('AppComponent', () => {
       fixture.detectChanges();
       expect(app.season?.id).toBe('spooky');
       expect(felt()).toBe('#251433');
-      expect(fixture.nativeElement.querySelectorAll('.doodle').length).toBe(4);
+      expect(fixture.nativeElement.querySelectorAll('.doodle').length).toBe(SEASONS.find(s => s.id === 'spooky')!.doodles.length);
       await app.roll();
       expect(dice.lastColor).toBe('#e8731c');
     });

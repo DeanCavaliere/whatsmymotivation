@@ -7,6 +7,20 @@ const DEV_ROLLS_KEY = 'wmm.dev.rolls';
 /** A roll should settle in a few seconds; past this we stop waiting on the 3D dice. */
 const ROLL_TIMEOUT_MS = 15000;
 
+/**
+ * dice-box's physics settings. Its worker adds mass / 3 (4/9 after updateConfig) to the gravity it's
+ * given, so 8/9 puts back the 4/3 it starts with. Bounce is the product of the die's and the floor's
+ * restitution, since updateConfig sets both; damping is the share of speed lost per second.
+ */
+// startingHeight matches init().
+const NORMAL_GRAVITY = {gravity: 8 / 9, restitution: 0.1, friction: 0.8, linearDamping: 0.5, angularDamping: 0.4, spinForce: 6, startingHeight: 7};
+/**
+ * The die is always thrown down hard, whatever the gravity, so the bounce has to come from a springy
+ * felt and a higher drop. Restitution sits just under 1, since at 1 the die never stops jittering; damping cuts
+ * the slow rocking that would otherwise follow the last bounce.
+ */
+const LOW_GRAVITY = {gravity: 0.05, restitution: 0.95, friction: 0.5, linearDamping: 0.3, angularDamping: 0.85, spinForce: 2, startingHeight: 11};
+
 export type DiceRenderer = '3d' | 'fallback';
 
 /**
@@ -64,9 +78,9 @@ export class DiceService {
     }
   }
 
-  /** 1 is normal; lower makes the dice float and take longer to settle. */
-  setGravity(gravity: number): void {
-    this.zone.runOutsideAngular(() => this.box?.updateConfig({gravity}));
+  /** Floaty dice for the low-gravity condition: they drift down, bounce high and spin longer. */
+  setLowGravity(low: boolean): void {
+    this.zone.runOutsideAngular(() => this.box?.updateConfig(low ? LOW_GRAVITY : NORMAL_GRAVITY));
   }
 
   /** Resolves with every die's value (one for normal, two for advantage/disadvantage). */

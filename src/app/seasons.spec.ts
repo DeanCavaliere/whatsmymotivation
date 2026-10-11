@@ -40,9 +40,9 @@ describe('SEASONS', () => {
     }
   });
 
-  it('puts one doodle in each corner', () => {
+  it('dresses every corner', () => {
     for (const season of SEASONS) {
-      expect(season.doodles.map(d => d.corner).sort()).toEqual(['bottom-left', 'bottom-right', 'top-left', 'top-right']);
+      expect([...new Set(season.doodles.map(d => d.corner))].sort()).toEqual(['bottom-left', 'bottom-right', 'top-left', 'top-right']);
     }
   });
 

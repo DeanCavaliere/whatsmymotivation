@@ -25,7 +25,7 @@ export function newTour(): Tour {
 }
 
 const LABELS: Record<TourStep, string> = {
-  roll: 'Roll today\'s motivation',
+  roll: 'Roll for motivation',
   quest: 'Finish today\'s quest',
   stats: 'Look at your stats',
   return: 'Come back tomorrow',

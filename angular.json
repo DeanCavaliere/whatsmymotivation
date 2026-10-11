@@ -58,6 +58,10 @@
                 {
                   "replace": "src/dev/seed.ts",
                   "with": "src/dev/seed.prod.ts"
+                },
+                {
+                  "replace": "src/dev/launcher.ts",
+                  "with": "src/dev/launcher.prod.ts"
                 }
               ],
               "outputHashing": "all",

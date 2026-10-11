@@ -1,5 +1,9 @@
 <app-confetti></app-confetti>
 
+@if (launcherPath) {
+  <a class="dev-chip" [href]="launcherPath" [target]="launcherTab" title="Dev launcher (`)">Dev <span #fps class="dev-fps"></span></a>
+}
+
 <div class="app">
   <header class="topbar">
     <h1 class="visually-hidden">What's My Motivation Today?</h1>
@@ -44,7 +48,7 @@
         }
       </div>
       <button type="button" class="btn btn-primary" (click)="roll()" [disabled]="!ready || rolling"
-        [class.is-calling]="tour && !stats.days.length && !rolling">
+        [class.is-calling]="showTourCard">
         {{ rollLabel }}
       </button>
     </div>
@@ -77,16 +81,45 @@
 
   <main #table class="table" [class.is-shaken]="tableShaken" [class.is-jolted]="tableJolted" [class.is-drained]="tableDrained">
     @if (season; as s) {
-      <div class="doodles" [class.is-dimmed]="result" aria-hidden="true">
+      @if (s.effect === 'vignette') {
+        <div class="season-vignette" aria-hidden="true"></div>
+      }
+      <!-- Frost covers the corners on snowy days, so the doodles move in out of it. -->
+      <div class="doodles" [class.is-dimmed]="result" [class.is-frosted]="condition === 'snowy'" aria-hidden="true">
         @for (d of s.doodles; track $index) {
-          <svg class="doodle" [attr.data-corner]="d.corner" viewBox="-60 -60 120 120"
-            [style.--size]="d.size" [style.--rotate.deg]="d.rotate" [style.--dx.%]="d.dx" [style.--dy.%]="d.dy">
-            @for (p of d.paths; track $index) {
-              <path [attr.d]="p.d" [class.is-filled]="p.fill"/>
+          <svg class="doodle" [attr.data-corner]="d.corner" [class.is-flush]="d.flush" viewBox="-60 -60 120 120"
+            [style.--size]="d.size" [style.--rotate.deg]="d.rotate" [style.--dx.%]="d.dx" [style.--dy.%]="d.dy" [style.--chalk]="d.tint">
+            <!-- A hanging doodle is cut off at its tie, so its thread seems to pay out as it drops. -->
+            @if (d.hangsFrom !== undefined) {
+              <clipPath [attr.id]="'doodle-tie-' + $index"><rect x="-200" [attr.y]="d.hangsFrom" width="400" height="400"/></clipPath>
             }
+            <g [attr.clip-path]="d.hangsFrom !== undefined ? 'url(#doodle-tie-' + $index + ')' : null">
+              <g [class.doodle-hang]="d.hangsFrom !== undefined">
+                <g class="doodle-lines">
+                  @for (p of d.paths; track $index) {
+                    @if (!p.fill) { <path [attr.d]="p.d" [attr.stroke-width]="p.width" [class.is-tinted]="p.tint" [style.--chalk]="p.tint"/> }
+                  }
+                </g>
+                <g class="doodle-fills">
+                  @for (p of d.paths; track $index) {
+                    @if (p.fill) { <path [attr.d]="p.d"/> }
+                  }
+                </g>
+              </g>
+            </g>
           </svg>
         }
       </div>
+      @if (s.effect === 'hearts') {
+        <div class="season-hearts" [class.is-dimmed]="result" aria-hidden="true">
+          @for (h of floatingHearts; track $index) {
+            <svg class="floating-heart" viewBox="-48 -38 96 72" [style.left.%]="h.x" [style.width.px]="h.size"
+              [style.--seconds.s]="h.seconds" [style.--delay.s]="h.delay" [style.--sway.px]="h.sway" [style.fill]="h.color">
+              <path [attr.d]="heartPath"/>
+            </svg>
+          }
+        </div>
+      }
     }
 
     <svg class="table-text" [class.is-dimmed]="result" [class.is-hidden]="showTourCard" viewBox="0 0 1000 1000" aria-hidden="true">
@@ -129,16 +162,19 @@
           @if (stats.days.length) {
             Roll for today's motivation to keep going.
           } @else {
-            Roll once a day. Your first roll is the day's motivation{{ prefs.quests ? ', and it comes with a small quest to match' : '' }}.
+            Each day's first roll sets your motivation{{ prefs.quests ? ' and a small quest to match' : '' }}.
           }
         </p>
         <ul class="tour-list">
           @for (item of items; track item.step) {
-            <li [class.is-done]="item.done"><span>{{ item.label }}</span><span class="visually-hidden">{{ item.done ? ', done' : '' }}</span></li>
+            @let next = !item.done && item.step === tourRollStep;
+            <li [class.is-done]="item.done" [class.is-next]="next">
+              <span>{{ item.label }}</span><span class="visually-hidden">{{ item.done ? ', done' : next ? ', with the button up top' : '' }}</span>
+            </li>
           }
         </ul>
         @if (prefs.rerolls) {
-          <p class="tour-reward">Finish all three for your first <span aria-hidden="true">✦</span> Inspiration.</p>
+          <p class="tour-reward">Finish all three to earn your first <span class="tour-star" aria-hidden="true">✦</span> Inspiration, a reroll for a bad day.</p>
         }
         <button type="button" class="tour-skip" (click)="skipTour()">Skip the tour</button>
       </section>
@@ -155,64 +191,74 @@
           <div class="result-sub">was {{ from.value }}{{ from.sides === r.sides ? '' : ' on d' + from.sides }}</div>
         }
         <p class="result-message">{{ r.verdict.message }}</p>
-        @if (r.isToday && r.streak > 1) {
-          <p class="result-streak">{{ r.streak }}-day streak{{ r.newBest ? ' · new best!' : '' }}</p>
-        }
-        @if (prefs.quests && r.isToday && today?.quest; as q) {
-          <div class="quest" [class.is-done]="q.done">
-            <label class="quest-line">
-              <input #questCheck type="checkbox" class="quest-check" [checked]="q.done" aria-describedby="quest-text"
-                (change)="setQuestDone(questCheck.checked)">
-              <span class="quest-text" id="quest-text"><small>Today's quest</small><span>{{ questText(q.id) }}</span></span>
-            </label>
-            @if (q.done) {
-              @if (today.note && !editingNote) {
-                <button type="button" class="quest-note" (click)="editingNote = true" title="Edit your note">
-                  “{{ today.note }}”<span class="visually-hidden">, edit your note</span>
-                </button>
-              } @else {
-                <form class="quest-form" (submit)="saveNote($event, noteInput.value)">
-                  <input #noteInput id="quest-note" type="text" [maxLength]="noteLimit" [value]="today.note ?? ''"
-                    placeholder="What did you get done?" aria-label="What did you get done? (optional)">
-                  <button type="submit" class="btn btn-ghost btn-small">Save</button>
-                </form>
+        <!-- One plate under the message: the quest, then what this roll earned, then Share and Reroll. -->
+        <div class="result-plate">
+          @if (prefs.quests && r.isToday && today?.quest; as q) {
+            <div class="quest" [class.is-done]="q.done">
+              <label class="quest-line">
+                <input #questCheck type="checkbox" class="quest-check" [checked]="q.done" aria-describedby="quest-text"
+                  (change)="setQuestDone(questCheck.checked)">
+                <span class="quest-text" id="quest-text"><small>Today's quest</small><span>{{ questText(q.id) }}</span></span>
+              </label>
+              @if (q.done) {
+                @if (today.note && !editingNote) {
+                  <button type="button" class="quest-note" (click)="editingNote = true" title="Edit your note">
+                    “{{ today.note }}”<span class="visually-hidden">, edit your note</span>
+                  </button>
+                } @else {
+                  <form class="quest-form" (submit)="saveNote($event, noteInput.value)">
+                    <input #noteInput id="quest-note" type="text" [maxLength]="noteLimit" [value]="today.note ?? ''"
+                      placeholder="What did you get done?" aria-label="What did you get done? (optional)">
+                    <button type="submit" class="btn btn-ghost btn-small">Save</button>
+                  </form>
+                }
               }
+            </div>
+          }
+          @let gain = prefs.rerolls ? r.inspiration : null;
+          @let streaking = r.isToday && r.streak > 1;
+          @if (r.badges.length || gain || streaking) {
+            <div class="result-earned">
+              @if (r.badges.length || gain) {
+                <small>You earned</small>
+              }
+              <ul class="result-chips">
+                @for (b of r.badges; track b.id) {
+                  <li><span aria-hidden="true">{{ b.icon }}</span> {{ b.name }}<span class="visually-hidden"> badge</span></li>
+                }
+                @if (gain) {
+                  <li><span class="result-star" aria-hidden="true">✦</span> {{ gain.kept ? '+' + gain.kept + ' Inspiration' : 'Inspiration full' }}</li>
+                }
+                @if (streaking) {
+                  <li class="result-streak"><span aria-hidden="true">🔥</span> {{ r.streak }}-day streak{{ r.newBest ? ' · new best!' : '' }}</li>
+                }
+              </ul>
+              @if (gain) {
+                <p class="result-earned-hint">
+                  {{ inspirationReason(gain, r.sides) }}.
+                  @if (gain.reasons.includes('tour')) {
+                    Save it for a day you don't like. It rerolls that day's roll.
+                  } @else if (gain.first) {
+                    Tap ✦ up top to see how it works.
+                  } @else if (!gain.kept) {
+                    Spend one to earn more.
+                  }
+                </p>
+              }
+            </div>
+          }
+          <div class="result-actions">
+            <button type="button" class="btn btn-ghost result-action" (click)="share()">
+              <svg class="result-glyph" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8M5 5l3-3 3 3M3 9v4h10V9"/></svg>
+              Share
+            </button>
+            @if (r.isToday && canReroll) {
+              <button type="button" class="btn btn-ghost result-action" (click)="askReroll()" aria-haspopup="dialog">
+                <svg class="result-glyph" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.5M13 2v3h-3"/></svg>
+                Reroll <span class="result-cost">· 1 <span aria-hidden="true">✦</span><span class="visually-hidden">Inspiration</span></span>
+              </button>
             }
           </div>
-        }
-        @if (r.badges.length) {
-          <p class="result-badge">
-            <span class="result-badge-icon" aria-hidden="true">{{ r.badges[0].icon }}</span>
-            <span><small>{{ r.badges.length === 1 ? 'Badge unlocked' : r.badges.length + ' badges unlocked' }}</small>{{ badgeNames(r.badges) }}</span>
-          </p>
-        }
-        @if (prefs.rerolls && r.inspiration; as gain) {
-          <p class="result-badge">
-            <span class="result-badge-icon" aria-hidden="true">✦</span>
-            <span>
-              <small>{{ gain.kept ? '+' + gain.kept + ' Inspiration' : 'Inspiration full' }}</small>{{ inspirationReason(gain, r.sides) }}
-              @if (gain.reasons.includes('tour')) {
-                <span class="result-badge-hint">Save it for a day you don't like. It rerolls that day's roll.</span>
-              } @else if (gain.first) {
-                <span class="result-badge-hint">Tap ✦ up top to see how it works.</span>
-              } @else if (!gain.kept) {
-                <span class="result-badge-hint">Spend one to earn more.</span>
-              }
-            </span>
-          </p>
-        }
-        <div class="result-actions">
-          <!-- On narrow tables these shrink to icons; the words stay for screen readers. -->
-          <button type="button" class="btn btn-ghost btn-small result-action" (click)="share()" title="Share">
-            <svg class="result-glyph" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8M5 5l3-3 3 3M3 9v4h10V9"/></svg>
-            <span class="result-action-label">Share</span>
-          </button>
-          @if (r.isToday && canReroll) {
-            <button type="button" class="btn btn-ghost btn-small result-action" (click)="askReroll()" aria-haspopup="dialog" title="Reroll · 1 ✦">
-              <svg class="result-glyph" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.5M13 2v3h-3"/></svg>
-              <span class="result-action-label">Reroll <span class="result-cost">· 1 <span aria-hidden="true">✦</span><span class="visually-hidden">Inspiration</span></span></span>
-            </button>
-          }
         </div>
       }
       @if (!ready) {
@@ -234,7 +280,7 @@
   </main>
 </div>
 
-<dialog #statsDialog class="panel" aria-labelledby="stats-title" (click)="onDialogClick($event)">
+<dialog #statsDialog class="panel panel-fixed" aria-labelledby="stats-title" (click)="onDialogClick($event)">
   <div class="panel-body">
     <header class="panel-header">
       <h2 id="stats-title">Your motivation stats</h2>
@@ -253,7 +299,7 @@
         (click)="setStatsTab('badges')" (keydown)="onTabKey($event)">Badges</button>
     </div>
 
-    <div id="stats-panel" role="tabpanel" tabindex="0" [attr.aria-labelledby]="'tab-' + statsTab">
+    <div id="stats-panel" class="panel-scroll" role="tabpanel" tabindex="0" [attr.aria-labelledby]="'tab-' + statsTab">
       @if (statsTab === 'badges') {
         <p class="badge-count"><strong>{{ badgeCount }}</strong> of {{ badgeList.length }} badges earned</p>
         <div class="progress" aria-hidden="true"><i [style.width.%]="badgeCount / badgeList.length * 100"></i></div>
@@ -277,25 +323,11 @@
       } @else {
         @if (statsTab === 'daily') {
           <p class="panel-note">Only your first roll each day counts here. That one is the day's motivation.</p>
-          <dl class="tiles">
-            <div>
-              <dt>Today's roll</dt>
-              <dd [attr.data-tier]="today ? tierOf(today.value, today.sides) : null">
-                {{ today ? today.value : '—' }}@if (today && today.sides !== 20) {<small class="die-tag">on d{{ today.sides }}</small>}
-              </dd>
-            </div>
-            <div>
-              <dt>Day streak</dt>
-              <dd>{{ streak }}</dd>
-            </div>
-            <div>
-              <dt>Best streak</dt>
-              <dd>{{ stats.streak.best }}</dd>
-            </div>
-            <div>
-              <dt>Days rolled</dt>
-              <dd>{{ daysRolled }}</dd>
-            </div>
+          <!-- Small cells rather than big tiles: the calendar is the main thing here, and it already marks today. -->
+          <dl class="stat-strip">
+            <div><dt>Day streak</dt><dd>{{ streak }}</dd></div>
+            <div><dt>Best streak</dt><dd>{{ stats.streak.best }}</dd></div>
+            <div><dt>Days rolled</dt><dd>{{ daysRolled }}</dd></div>
           </dl>
 
           @if (calendar; as cal) {
@@ -388,106 +420,14 @@
             </section>
           }
         } @else {
-          <p class="panel-note">Every roll, re-rolls included.</p>
-          <dl class="tiles">
-            <div>
-              <dt>Lifetime rolls</dt>
-              <dd>{{ stats.lifetimeRolls }}</dd>
-            </div>
-            <div>
-              <dt>This session</dt>
-              <dd>{{ sessionRolls }}</dd>
-            </div>
-            <div title="Rolled the die's highest face">
-              <dt>Crits</dt>
-              <dd>{{ totals.crits }}</dd>
-            </div>
-            <div title="Rolled a 1">
-              <dt>Crit fails</dt>
-              <dd>{{ totals.critFails }}</dd>
-            </div>
+          <p class="panel-note">Every roll, practice rolls included.</p>
+          <dl class="stat-strip">
+            <div><dt>Rolls</dt><dd>{{ stats.lifetimeRolls }}</dd></div>
+            <div><dt>This session</dt><dd>{{ sessionRolls }}</dd></div>
+            <div title="Rolled the die's highest face"><dt>Crits</dt><dd>{{ totals.crits }}</dd></div>
+            <div title="Rolled a 1"><dt>Crit fails</dt><dd>{{ totals.critFails }}</dd></div>
           </dl>
-        }
 
-        @if (statsView.die; as die) {
-          <div class="chart-header">
-            <h3 id="chart-title">Roll distribution</h3>
-            @if (statsView.dice.length > 1) {
-              <div class="segmented segmented-small" role="group" aria-label="Die to chart">
-                @for (d of statsView.dice; track d.sides) {
-                  <button type="button" [attr.aria-pressed]="d.sides === die.sides"
-                    (click)="setChartSides(d.sides)">d{{ d.sides }}</button>
-                }
-              </div>
-            }
-          </div>
-          <svg class="chart" [attr.viewBox]="'0 -4 ' + chart.width + ' ' + (chart.height + 22)" aria-hidden="true"
-            (mouseleave)="hoveredBar = null">
-            <line class="chart-baseline" [attr.x1]="statsView.bars[0].x" [attr.y1]="chart.height" [attr.y2]="chart.height"
-              [attr.x2]="statsView.bars[statsView.bars.length - 1].x + statsView.bars[statsView.bars.length - 1].width"/>
-            @for (bar of statsView.bars; track bar.face) {
-              <g>
-                <rect class="chart-bar" [class.is-hovered]="hoveredBar === bar"
-                  [attr.x]="bar.x" [attr.y]="bar.y" [attr.width]="bar.width" [attr.height]="bar.height"
-                  rx="3"/>
-                <!-- Taller-than-the-mark hit target -->
-                <rect class="chart-hit" [attr.x]="bar.x - chart.gap / 2" y="0" [attr.width]="bar.width + chart.gap"
-                  [attr.height]="chart.height + 22" (mouseenter)="hoveredBar = bar">
-                  <title>{{ bar.face }}: rolled {{ bar.count }} {{ bar.count === 1 ? 'time' : 'times' }}</title>
-                </rect>
-                @if (bar.labeled) {
-                  <text class="chart-tick"
-                  [attr.x]="bar.x + bar.width / 2" [attr.y]="chart.height + 16">{{ bar.face }}</text>
-                }
-              </g>
-            }
-          </svg>
-          <table class="visually-hidden" aria-labelledby="chart-title">
-            <thead>
-              <tr><th scope="col">Face of the d{{ die.sides }}</th><th scope="col">Times rolled</th></tr>
-            </thead>
-            <tbody>
-              @for (bar of statsView.bars; track bar.face) {
-                <tr><th scope="row">{{ bar.face }}</th><td>{{ bar.count }}</td></tr>
-              }
-            </tbody>
-          </table>
-          <p class="chart-readout" aria-hidden="true">
-            @if (hoveredBar) {
-              Rolled a <strong>{{ hoveredBar.face }}</strong> {{ hoveredBar.count }} {{ hoveredBar.count === 1 ? 'time' : 'times' }}
-              ({{ formatPercent(hoveredBar.count / die.rolls) }})
-            } @else {
-              Average <strong>{{ formatAverage(die.average) }}</strong> across {{ die.rolls }}
-              {{ statsTab === 'daily' ? (die.rolls === 1 ? 'day' : 'days') : (die.rolls === 1 ? 'roll' : 'rolls') }}
-              on the d{{ die.sides }}. Hover a bar for details.
-            }
-          </p>
-          <p class="visually-hidden">Average {{ formatAverage(die.average) }} on the d{{ die.sides }}.</p>
-        }
-
-        @if (statsTab === 'daily') {
-          @if (prefs.rerolls || stats.rerolls.used) {
-            <h3 id="rerolls-title">Rerolls</h3>
-            <dl class="tiles" aria-labelledby="rerolls-title">
-              <div>
-                <dt>Used</dt>
-                <dd>{{ stats.rerolls.used }}</dd>
-              </div>
-              <div title="Landed higher than the roll it replaced">
-                <dt>Helped</dt>
-                <dd>{{ stats.rerolls.better }}</dd>
-              </div>
-              <div title="Landed lower than the roll it replaced">
-                <dt>Backfired</dt>
-                <dd>{{ stats.rerolls.worse }}</dd>
-              </div>
-              <div>
-                <dt>Inspiration</dt>
-                <dd><span aria-hidden="true">✦ </span>{{ stats.inspiration.held }}</dd>
-              </div>
-            </dl>
-          }
-        } @else {
           @if (stats.history.length) {
             <h3 id="recent-rolls-title">Recent rolls</h3>
             <ol class="history" aria-labelledby="recent-rolls-title">
@@ -505,6 +445,81 @@
           } @else {
             <p class="empty">No tracked rolls yet. Close this and roll the die!</p>
           }
+        }
+
+        @let showRerolls = statsTab === 'daily' && (prefs.rerolls || stats.rerolls.used > 0);
+        @if (statsView.die || showRerolls) {
+          <!-- Folded away so the calendar leads; stays open across tabs once opened. -->
+          <details #moreStats class="accordion more-stats" [open]="moreStatsOpen" (toggle)="moreStatsOpen = moreStats.open">
+            <summary><span class="accordion-title">More stats</span></summary>
+            <div class="accordion-body">
+              @if (statsView.die; as die) {
+                <div class="chart-header">
+                  <h3 id="chart-title">Roll distribution</h3>
+                  @if (statsView.dice.length > 1) {
+                    <div class="segmented segmented-small" role="group" aria-label="Die to chart">
+                      @for (d of statsView.dice; track d.sides) {
+                        <button type="button" [attr.aria-pressed]="d.sides === die.sides"
+                          (click)="setChartSides(d.sides)">d{{ d.sides }}</button>
+                      }
+                    </div>
+                  }
+                </div>
+                <svg class="chart" [attr.viewBox]="'0 -4 ' + chart.width + ' ' + (chart.height + 22)" aria-hidden="true"
+                  (mouseleave)="hoveredBar = null">
+                  <line class="chart-baseline" [attr.x1]="statsView.bars[0].x" [attr.y1]="chart.height" [attr.y2]="chart.height"
+                    [attr.x2]="statsView.bars[statsView.bars.length - 1].x + statsView.bars[statsView.bars.length - 1].width"/>
+                  @for (bar of statsView.bars; track bar.face) {
+                    <g>
+                      <rect class="chart-bar" [class.is-hovered]="hoveredBar === bar"
+                        [attr.x]="bar.x" [attr.y]="bar.y" [attr.width]="bar.width" [attr.height]="bar.height"
+                        rx="3"/>
+                      <!-- Taller-than-the-mark hit target -->
+                      <rect class="chart-hit" [attr.x]="bar.x - chart.gap / 2" y="0" [attr.width]="bar.width + chart.gap"
+                        [attr.height]="chart.height + 22" (mouseenter)="hoveredBar = bar">
+                        <title>{{ bar.face }}: rolled {{ bar.count }} {{ bar.count === 1 ? 'time' : 'times' }}</title>
+                      </rect>
+                      @if (bar.labeled) {
+                        <text class="chart-tick"
+                        [attr.x]="bar.x + bar.width / 2" [attr.y]="chart.height + 16">{{ bar.face }}</text>
+                      }
+                    </g>
+                  }
+                </svg>
+                <table class="visually-hidden" aria-labelledby="chart-title">
+                  <thead>
+                    <tr><th scope="col">Face of the d{{ die.sides }}</th><th scope="col">Times rolled</th></tr>
+                  </thead>
+                  <tbody>
+                    @for (bar of statsView.bars; track bar.face) {
+                      <tr><th scope="row">{{ bar.face }}</th><td>{{ bar.count }}</td></tr>
+                    }
+                  </tbody>
+                </table>
+                <p class="chart-readout" aria-hidden="true">
+                  @if (hoveredBar) {
+                    Rolled a <strong>{{ hoveredBar.face }}</strong> {{ hoveredBar.count }} {{ hoveredBar.count === 1 ? 'time' : 'times' }}
+                    ({{ formatPercent(hoveredBar.count / die.rolls) }})
+                  } @else {
+                    Average <strong>{{ formatAverage(die.average) }}</strong> across {{ die.rolls }}
+                    {{ statsTab === 'daily' ? (die.rolls === 1 ? 'day' : 'days') : (die.rolls === 1 ? 'roll' : 'rolls') }}
+                    on the d{{ die.sides }}. Hover a bar for details.
+                  }
+                </p>
+                <p class="visually-hidden">Average {{ formatAverage(die.average) }} on the d{{ die.sides }}.</p>
+              }
+
+              @if (showRerolls) {
+                <h3 id="rerolls-title">Rerolls</h3>
+                <dl class="stat-strip" aria-labelledby="rerolls-title">
+                  <div><dt>Used</dt><dd>{{ stats.rerolls.used }}</dd></div>
+                  <div title="Landed higher than the roll it replaced"><dt>Helped</dt><dd>{{ stats.rerolls.better }}</dd></div>
+                  <div title="Landed lower than the roll it replaced"><dt>Backfired</dt><dd>{{ stats.rerolls.worse }}</dd></div>
+                  <div><dt>Inspiration</dt><dd><span aria-hidden="true">✦ </span>{{ stats.inspiration.held }}</dd></div>
+                </dl>
+              }
+            </div>
+          </details>
         }
       }
     </div>
@@ -525,197 +540,222 @@
       <button type="button" class="btn btn-ghost btn-small" (click)="settingsDialog.close()" aria-label="Close settings"><span aria-hidden="true">✕</span></button>
     </header>
 
-    <div class="settings-list">
-      <details class="accordion" name="settings">
-        <summary>
-          <span class="accordion-title">Die</span>
-          <span class="accordion-value"><span class="visually-hidden">, currently </span>d{{ prefs.sides }}</span>
-        </summary>
-        <div class="accordion-body">
-          <fieldset class="die-options">
-            <legend class="visually-hidden">Die to roll</legend>
-            <div class="die-row die-head" aria-hidden="true">
-              <span></span><span></span><span>Crit</span><span>Good day</span><span>Bad day</span>
-            </div>
-            @for (d of dieOptions; track d.sides) {
-              <!-- Named by the die alone; the blurb and odds are read as its description. -->
-              <label class="die-row">
-                <input type="radio" name="sides" [id]="'die-' + d.sides" [value]="d.sides" [checked]="prefs.sides === d.sides"
-                  [attr.aria-labelledby]="'die-' + d.sides + '-name'"
-                  [attr.aria-describedby]="'die-' + d.sides + '-blurb die-' + d.sides + '-crit die-' + d.sides + '-good die-' + d.sides + '-bad'"
-                  (change)="setSides(d.sides)">
-                <span class="die-name"><strong [id]="'die-' + d.sides + '-name'">d{{ d.sides }}</strong> <small [id]="'die-' + d.sides + '-blurb'">{{ d.blurb }}</small></span>
-                <span [id]="'die-' + d.sides + '-crit'"><span class="visually-hidden">Crit: </span>1 in {{ d.sides }}</span>
-                <span [id]="'die-' + d.sides + '-good'"><span class="visually-hidden">Good day: </span>{{ formatPercent(d.odds.good) }}</span>
-                <span [id]="'die-' + d.sides + '-bad'"><span class="visually-hidden">Bad day: </span>{{ formatPercent(d.odds.bad) }}</span>
-              </label>
-            }
-          </fieldset>
-          <p class="panel-note">Every die crits on its top face and fails on a 1. A good day is like a 12 or better
-            on the d20, a bad day 5 or lower. Odds are for a normal roll; advantage and disadvantage tilt them.</p>
-        </div>
-      </details>
-
-      <details class="accordion" name="settings">
-        <summary>
-          <span class="accordion-title">Accent color</span>
-          <span class="accordion-value">
-            <span class="visually-hidden">, currently </span>
-            <span class="swatch-chip swatch-accent" [style.--chip]="accentOf(prefs.accent).color" aria-hidden="true"></span>
-            {{ accentOf(prefs.accent).label }}
-          </span>
-        </summary>
-        <div class="accordion-body">
-          <fieldset class="swatches">
-            <legend class="visually-hidden">Accent color</legend>
-            @for (a of accents; track a.id) {
-              <label class="swatch">
-                <input type="radio" name="accent" [value]="a.id" [checked]="prefs.accent === a.id" (change)="setAccent(a.id)">
-                <span class="swatch-chip swatch-accent" [style.--chip]="a.color" aria-hidden="true"></span>
-                {{ a.label }}
-              </label>
-            }
-          </fieldset>
-          <p class="panel-note">Colors the buttons, selections and charts.</p>
-        </div>
-      </details>
-
-      <details class="accordion" name="settings">
-        <summary>
-          <span class="accordion-title">Dice color</span>
-          <span class="accordion-value">
-            <span class="visually-hidden">, currently </span>
-            <span class="swatch-chip swatch-die" [style.--chip]="diceTint" aria-hidden="true"></span>
-            {{ season ? season.diceLabel : diceColorOf(prefs.dice).label }}
-          </span>
-        </summary>
-        <div class="accordion-body">
-          <fieldset class="swatches">
-            <legend class="visually-hidden">Dice color</legend>
-            @if (seasonAvailable; as s) {
-              <label class="swatch">
-                <input type="radio" name="dice" [value]="s.id" [checked]="!!season" (change)="useSeason()">
-                <span class="swatch-chip swatch-die" [style.--chip]="s.dice" aria-hidden="true"></span>
-                {{ s.diceLabel }}
-              </label>
-            }
-            @for (d of diceColors; track d.id) {
-              <label class="swatch">
-                <input type="radio" name="dice" [value]="d.id" [checked]="!season && prefs.dice === d.id" (change)="setDice(d.id)">
-                <span class="swatch-chip swatch-die" [style.--chip]="d.color" aria-hidden="true"></span>
-                {{ d.label }}
-              </label>
-            }
-          </fieldset>
-          @if (seasonAvailable; as s) {
-            <p class="season-note">
-              @if (season) {
-                <span aria-hidden="true">{{ s.emoji }}</span> {{ s.label }} season is on until {{ seasonEnd(s) }}. Pick any dice color to turn it off until next season.
-              } @else {
-                {{ s.label }} season is off until next season. Pick {{ s.diceLabel }} to bring it back.
+    <!-- Ordered like a game's settings: how it plays, then sound, then looks, which are mostly set once. -->
+    <section class="settings-group" aria-labelledby="settings-rolling">
+      <h3 id="settings-rolling">Rolling</h3>
+      <div class="settings-list">
+        <details class="accordion" name="settings">
+          <summary>
+            <span class="accordion-title">Die</span>
+            <span class="accordion-value"><span class="visually-hidden">, currently </span>d{{ prefs.sides }}</span>
+          </summary>
+          <div class="accordion-body">
+            <fieldset class="die-options">
+              <legend class="visually-hidden">Die to roll</legend>
+              <div class="die-row die-head" aria-hidden="true">
+                <span></span><span></span><span>Crit</span><span>Good day</span><span>Bad day</span>
+              </div>
+              @for (d of dieOptions; track d.sides) {
+                <!-- Named by the die alone; the blurb and odds are read as its description. -->
+                <label class="die-row">
+                  <input type="radio" name="sides" [id]="'die-' + d.sides" [value]="d.sides" [checked]="prefs.sides === d.sides"
+                    [attr.aria-labelledby]="'die-' + d.sides + '-name'"
+                    [attr.aria-describedby]="'die-' + d.sides + '-blurb die-' + d.sides + '-crit die-' + d.sides + '-good die-' + d.sides + '-bad'"
+                    (change)="setSides(d.sides)">
+                  <span class="die-name"><strong [id]="'die-' + d.sides + '-name'">d{{ d.sides }}</strong> <small [id]="'die-' + d.sides + '-blurb'">{{ d.blurb }}</small></span>
+                  <span [id]="'die-' + d.sides + '-crit'"><span class="visually-hidden">Crit: </span>1 in {{ d.sides }}</span>
+                  <span [id]="'die-' + d.sides + '-good'"><span class="visually-hidden">Good day: </span>{{ formatPercent(d.odds.good) }}</span>
+                  <span [id]="'die-' + d.sides + '-bad'"><span class="visually-hidden">Bad day: </span>{{ formatPercent(d.odds.bad) }}</span>
+                </label>
               }
-            </p>
-          }
-          <p class="panel-note">The new color shows up on your next roll.</p>
-        </div>
-      </details>
+            </fieldset>
+            <p class="panel-note">Every die crits on its top face and fails on a 1. A good day is like a 12 or better
+              on the d20, a bad day 5 or lower. Odds are for a normal roll; advantage and disadvantage tilt them.</p>
+          </div>
+        </details>
 
-      <details class="accordion" name="settings">
-        <summary>
-          <span class="accordion-title">Table color</span>
-          <span class="accordion-value">
-            <span class="visually-hidden">, currently </span>
-            <span class="swatch-chip swatch-felt" [style.--chip]="season ? season.felt : tableThemeOf(prefs.table).felt" aria-hidden="true"></span>
-            {{ season ? season.label : tableThemeOf(prefs.table).label }}
-          </span>
-        </summary>
-        <div class="accordion-body">
-          <fieldset class="swatches">
-            <legend class="visually-hidden">Table color</legend>
-            @if (seasonAvailable; as s) {
-              <label class="swatch">
-                <input type="radio" name="table" [value]="s.id" [checked]="!!season" (change)="useSeason()">
-                <span class="swatch-chip swatch-felt" [style.--chip]="s.felt" aria-hidden="true"></span>
-                {{ s.label }}
-              </label>
-            }
-            @for (t of tableThemes; track t.id) {
-              <label class="swatch">
-                <input type="radio" name="table" [value]="t.id" [checked]="!season && prefs.table === t.id" (change)="setTable(t.id)">
-                <span class="swatch-chip swatch-felt" [style.--chip]="t.felt" aria-hidden="true"></span>
-                {{ t.label }}
-              </label>
-            }
-          </fieldset>
-          @if (seasonAvailable; as s) {
-            <p class="season-note">
-              @if (season) {
-                <span aria-hidden="true">{{ s.emoji }}</span> {{ s.label }} season is on until {{ seasonEnd(s) }}. Pick any table to turn it off until next season.
-              } @else {
-                {{ s.label }} season is off until next season. Pick {{ s.label }} to bring it back.
-              }
-            </p>
-          }
-        </div>
-      </details>
-
-      <label class="switch-row" for="rerolls-switch">
-        <span class="switch-text">
-          <strong id="rerolls-label">Inspiration and rerolls</strong>
-          <small id="rerolls-description">Earn ✦ for a natural top face and every 7th day of a streak, and spend one to reroll the day's roll.</small>
-        </span>
-        <span class="switch-state" aria-hidden="true">{{ prefs.rerolls ? 'On' : 'Off' }}</span>
-        <input #rerollsSwitch id="rerolls-switch" class="switch" type="checkbox" role="switch" [checked]="prefs.rerolls"
-          aria-labelledby="rerolls-label" aria-describedby="rerolls-description"
-          (change)="setRerolls(rerollsSwitch.checked)">
-      </label>
-
-      <label class="switch-row" for="quests-switch">
-        <span class="switch-text">
-          <strong id="quests-label">Daily quest</strong>
-          <small id="quests-description">A small task sized to the day's roll, and a line to note what you got done.</small>
-        </span>
-        <span class="switch-state" aria-hidden="true">{{ prefs.quests ? 'On' : 'Off' }}</span>
-        <input #questsSwitch id="quests-switch" class="switch" type="checkbox" role="switch" [checked]="prefs.quests"
-          aria-labelledby="quests-label" aria-describedby="quests-description"
-          (change)="setQuests(questsSwitch.checked)">
-      </label>
-
-      <label class="switch-row" for="sound-switch">
-        <span class="switch-text">
-          <strong id="sound-label">Sound</strong>
-          <small id="sound-description">Dice landing, and a fanfare or a sad trombone on a crit. The mute button up top does the same.</small>
-        </span>
-        <span class="switch-state" aria-hidden="true">{{ prefs.sound ? 'On' : 'Off' }}</span>
-        <input #soundSwitch id="sound-switch" class="switch" type="checkbox" role="switch" [checked]="prefs.sound"
-          aria-labelledby="sound-label" aria-describedby="sound-description"
-          (change)="setSound(soundSwitch.checked)">
-      </label>
-
-      @if (sound.canVibrate) {
-        <label class="switch-row" for="vibration-switch">
+        <label class="switch-row" for="rerolls-switch">
           <span class="switch-text">
-            <strong id="vibration-label">Vibration</strong>
-            <small id="vibration-description">A buzz when the dice land, and a pattern on a crit. Off when your device asks for reduced motion.</small>
+            <strong id="rerolls-label">Inspiration and rerolls</strong>
+            <small id="rerolls-description">Earn ✦ for a natural top face and every 7th day of a streak, and spend one to reroll the day's roll.</small>
           </span>
-          <span class="switch-state" aria-hidden="true">{{ prefs.vibration ? 'On' : 'Off' }}</span>
-          <input #vibrationSwitch id="vibration-switch" class="switch" type="checkbox" role="switch" [checked]="prefs.vibration"
-            aria-labelledby="vibration-label" aria-describedby="vibration-description"
-            (change)="setVibration(vibrationSwitch.checked)">
+          <span class="switch-state" aria-hidden="true">{{ prefs.rerolls ? 'On' : 'Off' }}</span>
+          <input #rerollsSwitch id="rerolls-switch" class="switch" type="checkbox" role="switch" [checked]="prefs.rerolls"
+            aria-labelledby="rerolls-label" aria-describedby="rerolls-description"
+            (change)="setRerolls(rerollsSwitch.checked)">
         </label>
-      }
 
-      <label class="switch-row" for="seasonal-switch">
-        <span class="switch-text">
-          <strong id="seasonal-label">Seasonal themes</strong>
-          <small id="seasonal-description">Holiday tables, dice and messages: Spooky in October, Festive in December, Valentine's Feb 10–14 and Lucky Mar 15–17.</small>
-        </span>
-        <span class="switch-state" aria-hidden="true">{{ prefs.seasonal ? 'On' : 'Off' }}</span>
-        <input #seasonalSwitch id="seasonal-switch" class="switch" type="checkbox" role="switch" [checked]="prefs.seasonal"
-          aria-labelledby="seasonal-label" aria-describedby="seasonal-description"
-          (change)="setSeasonal(seasonalSwitch.checked)">
-      </label>
-    </div>
+        <label class="switch-row" for="quests-switch">
+          <span class="switch-text">
+            <strong id="quests-label">Daily quest</strong>
+            <small id="quests-description">A small task sized to the day's roll, and a line to note what you got done.</small>
+          </span>
+          <span class="switch-state" aria-hidden="true">{{ prefs.quests ? 'On' : 'Off' }}</span>
+          <input #questsSwitch id="quests-switch" class="switch" type="checkbox" role="switch" [checked]="prefs.quests"
+            aria-labelledby="quests-label" aria-describedby="quests-description"
+            (change)="setQuests(questsSwitch.checked)">
+        </label>
+      </div>
+    </section>
+
+    <section class="settings-group" aria-labelledby="settings-sound">
+      <h3 id="settings-sound">{{ sound.canVibrate ? 'Sound and vibration' : 'Sound' }}</h3>
+      <div class="settings-list">
+        <label class="switch-row" for="sound-switch">
+          <span class="switch-text">
+            <strong id="sound-label">Sound</strong>
+            <small id="sound-description">Dice landing, and a fanfare or a sad trombone on a crit. The mute button up top does the same.</small>
+          </span>
+          <span class="switch-state" aria-hidden="true">{{ prefs.sound ? 'On' : 'Off' }}</span>
+          <input #soundSwitch id="sound-switch" class="switch" type="checkbox" role="switch" [checked]="prefs.sound"
+            aria-labelledby="sound-label" aria-describedby="sound-description"
+            (change)="setSound(soundSwitch.checked)">
+        </label>
+
+        @if (prefs.sound) {
+          <div class="volume-row">
+            <label for="volume-slider">Volume</label>
+            <input #volumeSlider id="volume-slider" class="volume-slider" type="range" min="0" max="1" step="0.05"
+              [value]="prefs.volume" [style.--fill.%]="volumePercent" [attr.aria-valuetext]="volumePercent + '%'"
+              (input)="setVolume(+volumeSlider.value)" (change)="setVolume(+volumeSlider.value, true)">
+            <span class="volume-value" aria-hidden="true">{{ volumePercent }}%</span>
+          </div>
+        }
+
+        @if (sound.canVibrate) {
+          <label class="switch-row" for="vibration-switch">
+            <span class="switch-text">
+              <strong id="vibration-label">Vibration</strong>
+              <small id="vibration-description">A buzz when the dice land, and a pattern on a crit. Off when your device asks for reduced motion.</small>
+            </span>
+            <span class="switch-state" aria-hidden="true">{{ prefs.vibration ? 'On' : 'Off' }}</span>
+            <input #vibrationSwitch id="vibration-switch" class="switch" type="checkbox" role="switch" [checked]="prefs.vibration"
+              aria-labelledby="vibration-label" aria-describedby="vibration-description"
+              (change)="setVibration(vibrationSwitch.checked)">
+          </label>
+        }
+      </div>
+    </section>
+
+    <!-- Seasonal themes lead, since they take over the table and dice colors below them. -->
+    <section class="settings-group" aria-labelledby="settings-appearance">
+      <h3 id="settings-appearance">Appearance</h3>
+      <div class="settings-list">
+        <label class="switch-row" for="seasonal-switch">
+          <span class="switch-text">
+            <strong id="seasonal-label">Seasonal themes</strong>
+            <small id="seasonal-description">Holiday tables, dice and messages: Spooky in October, Festive in December, Valentine's Feb 10–14 and Lucky Mar 15–17.</small>
+          </span>
+          <span class="switch-state" aria-hidden="true">{{ prefs.seasonal ? 'On' : 'Off' }}</span>
+          <input #seasonalSwitch id="seasonal-switch" class="switch" type="checkbox" role="switch" [checked]="prefs.seasonal"
+            aria-labelledby="seasonal-label" aria-describedby="seasonal-description"
+            (change)="setSeasonal(seasonalSwitch.checked)">
+        </label>
+
+        <details class="accordion" name="settings">
+          <summary>
+            <span class="accordion-title">Table color</span>
+            <span class="accordion-value">
+              <span class="visually-hidden">, currently </span>
+              <span class="swatch-chip swatch-felt" [style.--chip]="season ? season.felt : tableThemeOf(prefs.table).felt" aria-hidden="true"></span>
+              {{ season ? season.label : tableThemeOf(prefs.table).label }}
+            </span>
+          </summary>
+          <div class="accordion-body">
+            <fieldset class="swatches">
+              <legend class="visually-hidden">Table color</legend>
+              @if (seasonAvailable; as s) {
+                <label class="swatch">
+                  <input type="radio" name="table" [value]="s.id" [checked]="!!season" (change)="useSeason()">
+                  <span class="swatch-chip swatch-felt" [style.--chip]="s.felt" aria-hidden="true"></span>
+                  {{ s.label }}
+                </label>
+              }
+              @for (t of tableThemes; track t.id) {
+                <label class="swatch">
+                  <input type="radio" name="table" [value]="t.id" [checked]="!season && prefs.table === t.id" (change)="setTable(t.id)">
+                  <span class="swatch-chip swatch-felt" [style.--chip]="t.felt" aria-hidden="true"></span>
+                  {{ t.label }}
+                </label>
+              }
+            </fieldset>
+            @if (seasonAvailable; as s) {
+              <p class="season-note">
+                @if (season) {
+                  <span aria-hidden="true">{{ s.emoji }}</span> {{ s.label }} season is on until {{ seasonEnd(s) }}. Pick any table to turn it off until next season.
+                } @else {
+                  {{ s.label }} season is off until next season. Pick {{ s.label }} to bring it back.
+                }
+              </p>
+            }
+          </div>
+        </details>
+
+        <details class="accordion" name="settings">
+          <summary>
+            <span class="accordion-title">Dice color</span>
+            <span class="accordion-value">
+              <span class="visually-hidden">, currently </span>
+              <span class="swatch-chip swatch-die" [style.--chip]="diceTint" aria-hidden="true"></span>
+              {{ season ? season.diceLabel : diceColorOf(prefs.dice).label }}
+            </span>
+          </summary>
+          <div class="accordion-body">
+            <fieldset class="swatches">
+              <legend class="visually-hidden">Dice color</legend>
+              @if (seasonAvailable; as s) {
+                <label class="swatch">
+                  <input type="radio" name="dice" [value]="s.id" [checked]="!!season" (change)="useSeason()">
+                  <span class="swatch-chip swatch-die" [style.--chip]="s.dice" aria-hidden="true"></span>
+                  {{ s.diceLabel }}
+                </label>
+              }
+              @for (d of diceColors; track d.id) {
+                <label class="swatch">
+                  <input type="radio" name="dice" [value]="d.id" [checked]="!season && prefs.dice === d.id" (change)="setDice(d.id)">
+                  <span class="swatch-chip swatch-die" [style.--chip]="d.color" aria-hidden="true"></span>
+                  {{ d.label }}
+                </label>
+              }
+            </fieldset>
+            @if (seasonAvailable; as s) {
+              <p class="season-note">
+                @if (season) {
+                  <span aria-hidden="true">{{ s.emoji }}</span> {{ s.label }} season is on until {{ seasonEnd(s) }}. Pick any dice color to turn it off until next season.
+                } @else {
+                  {{ s.label }} season is off until next season. Pick {{ s.diceLabel }} to bring it back.
+                }
+              </p>
+            }
+            <p class="panel-note">The new color shows up on your next roll.</p>
+          </div>
+        </details>
+
+        <details class="accordion" name="settings">
+          <summary>
+            <span class="accordion-title">Accent color</span>
+            <span class="accordion-value">
+              <span class="visually-hidden">, currently </span>
+              <span class="swatch-chip swatch-accent" [style.--chip]="accentOf(prefs.accent).color" aria-hidden="true"></span>
+              {{ accentOf(prefs.accent).label }}
+            </span>
+          </summary>
+          <div class="accordion-body">
+            <fieldset class="swatches">
+              <legend class="visually-hidden">Accent color</legend>
+              @for (a of accents; track a.id) {
+                <label class="swatch">
+                  <input type="radio" name="accent" [value]="a.id" [checked]="prefs.accent === a.id" (change)="setAccent(a.id)">
+                  <span class="swatch-chip swatch-accent" [style.--chip]="a.color" aria-hidden="true"></span>
+                  {{ a.label }}
+                </label>
+              }
+            </fieldset>
+            <p class="panel-note">Colors the buttons, selections and charts.</p>
+          </div>
+        </details>
+      </div>
+    </section>
 
     @if (install) {
       <h3>App</h3>

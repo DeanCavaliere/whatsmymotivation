@@ -4,13 +4,14 @@ import {ConfettiComponent} from './components/confetti/confetti.component';
 import {TableWeatherComponent} from './components/table-weather/table-weather.component';
 import {ConditionInfo, CONDITIONS, DayCondition, forcedMode, isDayCondition} from './conditions';
 import {ConfettiService} from './components/confetti/confetti.service';
+import {LAUNCHER_PATH, LAUNCHER_TAB, startFpsMeter} from '../dev/launcher';
 import {Badge, BADGES, newBadges, Progress} from './achievements';
 import {CalendarDay, CalendarMonth, calendarMonth, earliestMonth, shiftMonth} from './calendar';
 import {CrackPath, crackPaths} from './crack';
 import {formatAverage, formatCount, formatDate, formatPercent} from './format';
 import {NOTE_LIMIT, questById} from './quests';
-import {TourItem, tourDone, tourItems} from './tour';
-import {activeSeason, Season, seasonKey, SEASONS} from './seasons';
+import {TourItem, TourStep, tourDone, tourItems} from './tour';
+import {activeSeason, FLOATING_HEARTS, HEART_PATH, Season, seasonKey, SEASONS} from './seasons';
 import {shareText} from './share';
 import {DiceService} from './dice.service';
 import {SoundService} from './sound.service';
@@ -144,6 +145,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   @ViewChild('conditionDialog', {static: true}) conditionDialogRef!: ElementRef<HTMLDialogElement>;
   @ViewChild('tourDialog', {static: true}) tourDialogRef!: ElementRef<HTMLDialogElement>;
   @ViewChild(TableWeatherComponent) weather?: TableWeatherComponent;
+  @ViewChild('fps') fpsRef?: ElementRef<HTMLElement>;
 
   /** `label` is shortened to fit the top bar; screen readers get `name`. */
   readonly modes: { value: RollMode, label: string, name: string, hint: string }[] = [
@@ -151,6 +153,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     {value: 'normal', label: 'Normal', name: 'Normal', hint: 'Roll one die'},
     {value: 'advantage', label: 'Adv.', name: 'Advantage', hint: 'Roll two dice, keep the higher'},
   ];
+  readonly floatingHearts = FLOATING_HEARTS;
+  readonly heartPath = HEART_PATH;
   readonly chart = CHART;
   readonly tableThemes = TABLE_THEMES;
   readonly diceColors = DICE_COLORS;
@@ -166,6 +170,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly accentOf = accentColor;
   readonly inspirationCap = INSPIRATION_CAP;
   readonly streakStep = STREAK_STEP;
+  /** Dev builds only: the dev launcher, behind the Dev chip and the ` key. Empty in production. */
+  readonly launcherPath = LAUNCHER_PATH;
+  readonly launcherTab = LAUNCHER_TAB;
   /** Today's table condition. */
   condition: DayCondition = 'clear';
   /** Counts throws, so a foggy table fogs over again for each one. */
@@ -214,6 +221,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   badgeList: BadgeView[] = [];
   badgeCount = 0;
   hoveredBar: ChartBar | null = null;
+  /** Whether Stats › More stats is unfolded, kept while switching tabs. */
+  moreStatsOpen = false;
   confirmingReset = false;
   prefs: Prefs;
   /** The season on today's date, when seasonal themes are on. */
@@ -232,6 +241,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private tourTimer?: ReturnType<typeof setTimeout>;
   private inspirationTimer?: ReturnType<typeof setTimeout>;
   private resizeObserver?: ResizeObserver;
+  private stopFps?: () => void;
   private reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
 
   constructor(private dice: DiceService,
@@ -278,6 +288,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.resizeObserver = new ResizeObserver(() => this.zone.run(() => this.measureCrack()));
       this.resizeObserver.observe(this.tableRef.nativeElement);
     }
+    const fps = this.fpsRef?.nativeElement;
+    if (fps && typeof requestAnimationFrame === 'function') {
+      this.stopFps = this.zone.runOutsideAngular(() => startFpsMeter(fps));
+    }
   }
 
   ngOnDestroy(): void {
@@ -288,6 +302,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     clearTimeout(this.tourTimer);
     clearTimeout(this.inspirationTimer);
     this.resizeObserver?.disconnect();
+    this.stopFps?.();
   }
 
   /** Keeps counters in sync when another tab rolls. */
@@ -301,6 +316,18 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.prefs = this.prefsService.load();
       this.applyTable();
     }
+  }
+
+  /** Dev builds only: ` opens the dev launcher, reusing its tab if one is open. */
+  @HostListener('document:keydown', ['$event'])
+  onKeydown(event: KeyboardEvent): void {
+    const target = event.target as HTMLElement | null;
+    if (!this.launcherPath || event.key !== '`' || event.ctrlKey || event.metaKey || event.altKey
+      || target?.closest('input, textarea, select, [contenteditable]')) {
+      return;
+    }
+    event.preventDefault();
+    window.open(this.launcherPath, this.launcherTab);
   }
 
   /** Chromium browsers offer an install prompt that we can trigger from our own button. */
@@ -368,6 +395,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   /** The checklist sits on the empty felt, until the dice are thrown. */
   get showTourCard(): boolean {
     return !!this.tour && !this.result && !this.rolling;
+  }
+
+  /** The step the Roll button ticks off: the first roll, or the roll on a later day. */
+  get tourRollStep(): TourStep {
+    return this.stats.days.length ? 'return' : 'roll';
   }
 
   get tourStepsDone(): number {
@@ -479,7 +511,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   resultLabel(result: RollResult, separator = ' · '): string {
     return [
-      result.isToday ? 'Today\'s roll' : 'Re-roll',
+      result.isToday ? 'Today\'s roll' : 'Practice roll',
       result.rerolledFrom ? 'rerolled' : '',
       result.sides === 20 ? '' : `d${result.sides}`,
       result.mode === 'normal' ? '' : result.mode,
@@ -513,6 +545,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.calendar = null;
     this.refreshStatsView();
     this.statsDialogRef.nativeElement.showModal();
+    this.scrollStatsToTop();
     if (this.tour && !this.stats.tour.sawStats) {
       this.stats = this.statsService.sawStats();
       this.announcement = '';
@@ -523,6 +556,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   setStatsTab(tab: StatsTab): void {
     this.statsTab = tab;
     this.refreshStatsView();
+    this.scrollStatsToTop();
+  }
+
+  /** The tabs share one scrolling area, so each tab, and each opening, starts at its top. */
+  private scrollStatsToTop(): void {
+    const panel = document.getElementById('stats-panel');
+    if (panel) {
+      panel.scrollTop = 0;
+    }
   }
 
   /** Arrow keys move between tabs, as in any tablist. */
@@ -806,6 +848,20 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.applyTable();
   }
 
+  /** `preview` plays a die landing at the new volume, once the slider is let go. */
+  setVolume(volume: number, preview = false): void {
+    this.prefs = {...this.prefs, volume};
+    this.prefsService.save(this.prefs);
+    this.applyTable();
+    if (preview) {
+      this.sound.diceThrown(1);
+    }
+  }
+
+  get volumePercent(): number {
+    return Math.round(this.prefs.volume * 100);
+  }
+
   setVibration(vibration: boolean): void {
     this.prefs = {...this.prefs, vibration};
     this.prefsService.save(this.prefs);
@@ -931,11 +987,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   private applyGravity(): void {
-    this.dice.setGravity(this.condition === 'low-gravity' ? 0.35 : 1);
+    this.dice.setLowGravity(this.condition === 'low-gravity');
   }
 
   private applyTable(): void {
     this.sound.sound = this.prefs.sound;
+    this.sound.volume = this.prefs.volume;
     this.sound.vibration = this.prefs.vibration;
     const now = new Date();
     this.seasonAvailable = this.prefs.seasonal ? previewSeason() ?? activeSeason(now) : null;

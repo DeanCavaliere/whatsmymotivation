@@ -3,6 +3,15 @@
 <div class="flash" [class.is-on]="flashing" aria-hidden="true"></div>
 <canvas #fog class="fog" [class.is-on]="fogged" aria-hidden="true"
   (pointerdown)="onFogDown($event)" (pointermove)="onFogMove($event)" (pointerup)="onFogUp()" (pointercancel)="onFogUp()"></canvas>
+<canvas #wisps class="wisps" [class.is-on]="fogged" aria-hidden="true"></canvas>
 @if (fogged) {
+  <!-- Until the first wipe: shows that the fog can be wiped away by hand. Swipes go through it to the fog. -->
+  @if (hinting) {
+    <p class="fog-hint" aria-hidden="true">
+      <span class="fog-hint-track"><span class="fog-hint-dot"></span></span>
+      <span class="fog-hint-mouse">Drag across the fog to wipe it away</span>
+      <span class="fog-hint-touch">Swipe across the fog to wipe it away</span>
+    </p>
+  }
   <button type="button" class="btn btn-ghost btn-small fog-button" (click)="clearFog()">Clear the fog</button>
 }
