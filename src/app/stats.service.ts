@@ -2,6 +2,7 @@ import {Inject, Injectable, InjectionToken} from '@angular/core';
 import {DayCondition, INSPIRED_AT, isDayCondition, pruneConditions, rollCondition} from './conditions';
 import {d20Scale, DIE_SIDES, DieSides, isDieSides, RollMode} from './motivation';
 import {NOTE_LIMIT, questById, questFor} from './quests';
+import {newTour, Tour} from './tour';
 
 export type KeyValueStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
@@ -75,17 +76,17 @@ export interface Rerolls {
 
 /** ✦ tokens: earned on good days, spent to reroll the day's roll. */
 export interface Inspiration {
-  /** 0 to INSPIRATION_CAP. Everyone starts with one. */
+  /** 0 to INSPIRATION_CAP. The first comes from finishing Getting started. */
   held: number;
-  /** All ✦ ever earned (not the starting one), so the first earn can explain itself. */
+  /** All ✦ ever earned, so the first earn can explain itself. */
   earned: number;
 }
 
 /**
  * Why a roll earned ✦: a natural top face as the day's roll, every STREAK_STEP-th day of a streak,
- * or a high roll on an Inspired day.
+ * a high roll on an Inspired day, or finishing Getting started.
  */
-export type InspirationReason = 'natural' | 'streak' | 'inspired';
+export type InspirationReason = 'natural' | 'streak' | 'inspired' | 'tour';
 
 export const INSPIRATION_CAP = 3;
 export const STREAK_STEP = 7;
@@ -109,6 +110,7 @@ export interface Stats {
   conditions: Record<string, DayCondition>;
   /** Badge id → the local date it was earned. */
   achievements: Record<string, string>;
+  tour: Tour;
 }
 
 export interface DieSummary {
@@ -137,9 +139,10 @@ export function emptyStats(): Stats {
     days: [],
     streak: {current: 0, best: 0, lastDate: null},
     rerolls: {used: 0, better: 0, worse: 0},
-    inspiration: {held: 1, earned: 0},
+    inspiration: {held: 0, earned: 0},
     conditions: {},
     achievements: {},
+    tour: newTour(),
   };
 }
 
@@ -323,6 +326,11 @@ function sanitizeInspiration(raw: unknown): Inspiration {
   return {held: Math.min(INSPIRATION_CAP, Math.floor(n.held)), earned: count(n.earned)};
 }
 
+function sanitizeTour(raw: unknown): Tour {
+  const t = raw && typeof raw === 'object' ? raw as Partial<Tour> : {};
+  return {finished: t.finished === true, sawStats: t.sawStats === true};
+}
+
 function sanitizeConditions(raw: unknown): Record<string, DayCondition> {
   const conditions: Record<string, DayCondition> = {};
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
@@ -372,6 +380,7 @@ export function sanitize(raw: unknown): Stats {
   stats.inspiration = sanitizeInspiration(r['inspiration']);
   stats.conditions = sanitizeConditions(r['conditions']);
   stats.achievements = sanitizeAchievements(r['achievements']);
+  stats.tour = sanitizeTour(r['tour']);
   return stats;
 }
 
@@ -502,10 +511,32 @@ export class StatsService {
     if (known) {
       return known;
     }
-    const condition = rollCondition(stats.conditions, date, random);
+    // No conditions until Getting started is finished, so nothing muddles the first rolls.
+    const condition = stats.tour.finished ? rollCondition(stats.conditions, date, random) : 'clear';
     stats.conditions = {...pruneConditions(stats.conditions, date, DAYS_LIMIT), [date]: condition};
     this.save(stats);
     return condition;
+  }
+
+  /** Finishes (or skips) Getting started and gives the first ✦. Only rewards once. */
+  finishTour(): Stats {
+    const stats = this.load();
+    if (!stats.tour.finished) {
+      stats.tour = {...stats.tour, finished: true};
+      stats.inspiration = earn(stats.inspiration, 1);
+      this.save(stats);
+    }
+    return stats;
+  }
+
+  /** Notes that the stats were opened, for Getting started with the daily quest off. */
+  sawStats(): Stats {
+    const stats = this.load();
+    if (!stats.tour.sawStats) {
+      stats.tour = {...stats.tour, sawStats: true};
+      this.save(stats);
+    }
+    return stats;
   }
 
   /** Records badges as earned today. Re-reads storage first, like a roll. */

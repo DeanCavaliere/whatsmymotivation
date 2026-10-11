@@ -173,3 +173,139 @@
     white-space: nowrap;
   }
 }
+
+/* ---------- Getting started ---------- */
+
+.tour-card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  translate: -50% -50%;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  width: min(22rem, calc(100% - 32px));
+  padding: 18px 20px;
+  border-radius: 16px;
+  background: rgba(10, 10, 12, 0.72);
+  color: var(--ink);
+  text-align: center;
+}
+
+.tour-card h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.tour-card p {
+  margin: 0;
+  font-size: 15px;
+}
+
+.tour-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+  font-weight: 600;
+}
+
+.tour-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.tour-list li::before {
+  content: "";
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  translate: 0 1px;
+}
+
+.tour-list li.is-done {
+  color: var(--ink-muted);
+}
+
+.tour-list li.is-done > span:first-of-type {
+  text-decoration: line-through;
+}
+
+.tour-list li.is-done::before {
+  content: "✓";
+  border: 0;
+  height: auto;
+  font-size: 14px;
+  line-height: 1;
+  translate: 0;
+}
+
+.tour-card .tour-reward {
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.tour-skip {
+  padding: 2px 4px;
+  border: 0;
+  background: none;
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.tour-skip:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.table-text.is-hidden {
+  opacity: 0;
+}
+
+/* A preview condition and the tour can both be up; stack them. */
+.condition-pill + .tour-pill {
+  top: 46px;
+}
+
+.tour-pill.is-ticked {
+  animation: tour-tick 900ms ease-out;
+}
+
+@keyframes tour-tick {
+  30% { scale: 1.1; }
+}
+
+/* Nudges a new player towards their first roll. */
+.btn.is-calling {
+  animation: calling 1.6s ease-in-out infinite;
+}
+
+@keyframes calling {
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 35%, transparent); }
+}
+
+.hud-inspiration.is-new {
+  animation: inspiration-pop 700ms cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+
+@keyframes inspiration-pop {
+  from { scale: 0.2; opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-pill.is-ticked,
+  .btn.is-calling,
+  .hud-inspiration.is-new {
+    animation: none;
+  }
+}

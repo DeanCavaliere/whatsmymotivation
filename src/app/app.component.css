@@ -136,7 +136,8 @@
 }
 
 /* Today's table condition, above the fog so it can always be tapped. */
-.condition-pill {
+.condition-pill,
+.tour-pill {
   position: absolute;
   top: 10px;
   left: 50%;

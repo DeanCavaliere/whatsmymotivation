@@ -16,8 +16,8 @@
         <dt>Lifetime</dt>
         <dd>{{ stats.lifetimeRolls }}</dd>
       </div>
-      @if (prefs.rerolls) {
-        <div>
+      @if (showInspiration) {
+        <div class="hud-inspiration" [class.is-new]="inspirationNew">
           <dt id="inspiration-label">Inspiration</dt>
           <dd>
             <button type="button" class="hud-button" (click)="openInspiration()" aria-haspopup="dialog"
@@ -43,7 +43,8 @@
           </button>
         }
       </div>
-      <button type="button" class="btn btn-primary" (click)="roll()" [disabled]="!ready || rolling">
+      <button type="button" class="btn btn-primary" (click)="roll()" [disabled]="!ready || rolling"
+        [class.is-calling]="tour && !stats.days.length && !rolling">
         {{ rollLabel }}
       </button>
     </div>
@@ -88,7 +89,7 @@
       </div>
     }
 
-    <svg class="table-text" [class.is-dimmed]="result" viewBox="0 0 1000 1000" aria-hidden="true">
+    <svg class="table-text" [class.is-dimmed]="result" [class.is-hidden]="showTourCard" viewBox="0 0 1000 1000" aria-hidden="true">
       <defs>
         <path id="arc-top" d="M 190 500 A 310 310 0 0 1 810 500"/>
         <path id="arc-bottom" d="M 150 500 A 350 350 0 0 0 850 500"/>
@@ -115,6 +116,32 @@
       <button type="button" class="condition-pill" (click)="openCondition()" aria-haspopup="dialog">
         <span aria-hidden="true">{{ c.icon }}</span> {{ c.name }} today
       </button>
+    }
+    @if (tour && result) {
+      <button type="button" class="tour-pill" [class.is-ticked]="tourTicked" (click)="openTour()" aria-haspopup="dialog">
+        Getting started · {{ tourStepsDone }} of {{ tour.length }}
+      </button>
+    }
+    @if (showTourCard && tour; as items) {
+      <section class="tour-card" aria-labelledby="tour-card-title">
+        <h2 id="tour-card-title">{{ stats.days.length ? 'Welcome back' : 'Welcome to the table' }}</h2>
+        <p>
+          @if (stats.days.length) {
+            Roll for today's motivation to keep going.
+          } @else {
+            Roll once a day. Your first roll is the day's motivation{{ prefs.quests ? ', and it comes with a small quest to match' : '' }}.
+          }
+        </p>
+        <ul class="tour-list">
+          @for (item of items; track item.step) {
+            <li [class.is-done]="item.done"><span>{{ item.label }}</span><span class="visually-hidden">{{ item.done ? ', done' : '' }}</span></li>
+          }
+        </ul>
+        @if (prefs.rerolls) {
+          <p class="tour-reward">Finish all three for your first <span aria-hidden="true">✦</span> Inspiration.</p>
+        }
+        <button type="button" class="tour-skip" (click)="skipTour()">Skip the tour</button>
+      </section>
     }
 
     <section class="result" aria-label="Result">
@@ -164,7 +191,9 @@
             <span class="result-badge-icon" aria-hidden="true">✦</span>
             <span>
               <small>{{ gain.kept ? '+' + gain.kept + ' Inspiration' : 'Inspiration full' }}</small>{{ inspirationReason(gain, r.sides) }}
-              @if (gain.first) {
+              @if (gain.reasons.includes('tour')) {
+                <span class="result-badge-hint">Save it for a day you don't like. It rerolls that day's roll.</span>
+              } @else if (gain.first) {
                 <span class="result-badge-hint">Tap ✦ up top to see how it works.</span>
               } @else if (!gain.kept) {
                 <span class="result-badge-hint">Spend one to earn more.</span>
@@ -735,6 +764,29 @@
     </header>
     <p class="panel-note">{{ conditionInfo?.description }}</p>
     <p class="panel-note">Every table gets its own conditions, about eight days a month. This one lasts until midnight.</p>
+  </div>
+</dialog>
+
+<dialog #tourDialog class="panel panel-small" aria-labelledby="tour-title" (click)="onDialogClick($event)">
+  <div class="panel-body">
+    <header class="panel-header">
+      <h2 id="tour-title">Getting started</h2>
+      <button type="button" class="btn btn-ghost btn-small" (click)="tourDialog.close()" aria-label="Close"><span aria-hidden="true">✕</span></button>
+    </header>
+    @if (tour; as items) {
+      <ul class="tour-list">
+        @for (item of items; track item.step) {
+          <li [class.is-done]="item.done"><span>{{ item.label }}</span><span class="visually-hidden">{{ item.done ? ', done' : '' }}</span></li>
+        }
+      </ul>
+    }
+    @if (prefs.rerolls) {
+      <p class="panel-note">Finish all three for your first ✦ Inspiration. Spend it to reroll a day you don't like.</p>
+    }
+    <div class="dialog-buttons">
+      <button type="button" class="btn btn-ghost" (click)="skipTour()">Skip the tour</button>
+      <button type="button" class="btn btn-primary" (click)="tourDialog.close()">Got it</button>
+    </div>
   </div>
 </dialog>
 

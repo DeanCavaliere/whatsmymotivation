@@ -165,10 +165,35 @@ describe('StatsService', () => {
     expect(dieSummaries(sanitize(null).counts)).toEqual([]);
   });
 
-  describe('Inspiration and rerolls', () => {
-    it('starts everyone with one ✦', () => {
-      expect(service.load().inspiration).toEqual({held: 1, earned: 0});
+  describe('Getting started', () => {
+    it('starts with no ✦, and finishing gives the first one, once', () => {
+      expect(service.load().inspiration).toEqual({held: 0, earned: 0});
+      expect(service.finishTour().inspiration).toEqual({held: 1, earned: 1});
+      expect(service.finishTour().inspiration).toEqual({held: 1, earned: 1});
+      expect(service.load().tour).toEqual({finished: true, sawStats: false});
     });
+
+    it('notes when the stats were looked at', () => {
+      expect(service.sawStats().tour).toEqual({finished: false, sawStats: true});
+    });
+
+    it('keeps the table clear until it is finished', () => {
+      expect(service.condition(day(10), () => 0)).toBe('clear');
+      service.finishTour();
+      // Today's stays clear; the next day can bring a condition.
+      expect(service.condition(day(10), () => 0)).toBe('clear');
+      expect(service.condition(day(11), () => 0)).not.toBe('clear');
+    });
+
+    it('reads a stored tour, ignoring junk', () => {
+      expect(sanitize({tour: {finished: true, sawStats: 'yes'}}).tour).toEqual({finished: true, sawStats: false});
+      expect(sanitize({tour: 3}).tour).toEqual({finished: false, sawStats: false});
+    });
+  });
+
+  describe('Inspiration and rerolls', () => {
+    // Getting started hands over the first ✦.
+    beforeEach(() => service.finishTour());
 
     it('spends a ✦ to replace today\'s roll and keeps what it replaced', () => {
       service.record(4, 20, 'normal', morning);
@@ -198,28 +223,28 @@ describe('StatsService', () => {
 
     it('earns a ✦ for a natural top face as the day\'s roll, not a practice roll', () => {
       service.record(20, 20, 'normal', morning);
-      expect(service.load().inspiration).toEqual({held: 2, earned: 1});
+      expect(service.load().inspiration).toEqual({held: 2, earned: 2});
       service.record(20, 20, 'normal', evening);
       expect(service.load().inspiration.held).toBe(2);
     });
 
     it('earns a ✦ back when a reroll lands the top face', () => {
       service.record(2, 20, 'normal', morning);
-      expect(service.reroll(20, 20, 'normal', evening).inspiration).toEqual({held: 1, earned: 1});
+      expect(service.reroll(20, 20, 'normal', evening).inspiration).toEqual({held: 1, earned: 2});
     });
 
     it('earns a ✦ on every 7th day of a streak', () => {
       for (let d = 1; d <= 14; d++) {
         service.record(10, 20, 'normal', day(d));
       }
-      expect(service.load().inspiration).toEqual({held: 3, earned: 2});
+      expect(service.load().inspiration).toEqual({held: 3, earned: 3});
     });
 
     it('holds at most three', () => {
       for (let d = 1; d <= 5; d++) {
         service.record(20, 20, 'normal', day(d));
       }
-      expect(service.load().inspiration).toEqual({held: INSPIRATION_CAP, earned: 2});
+      expect(service.load().inspiration).toEqual({held: INSPIRATION_CAP, earned: 3});
     });
 
     it('names why a roll earned ✦', () => {
@@ -239,6 +264,7 @@ describe('StatsService', () => {
     });
 
     it('brings a new quest with a reroll, and keeps the note', () => {
+      service.finishTour();
       service.record(3, 20, 'normal', morning, 'clear', () => 0);
       service.setQuestDone('2026-10-10', true);
       service.setNote('2026-10-10', 'Inbox zero');

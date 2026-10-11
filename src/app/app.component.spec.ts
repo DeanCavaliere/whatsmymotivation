@@ -189,6 +189,7 @@ describe('AppComponent', () => {
     });
 
     it('spends a ✦ to reroll today\'s roll, but only after confirming', async () => {
+      app.skipTour();
       dice.next = [3];
       await app.roll();
       fixture.detectChanges();
@@ -218,6 +219,7 @@ describe('AppComponent', () => {
     });
 
     it('keeps the roll when the reroll is turned down', async () => {
+      app.skipTour();
       dice.next = [3];
       await app.roll();
       fixture.detectChanges();
@@ -239,10 +241,12 @@ describe('AppComponent', () => {
       expect(app.result!.inspiration).toEqual({reasons: ['natural'], kept: 1, first: true});
       const pills = [...fixture.nativeElement.querySelectorAll('.result-badge')].map((p: Element) => p.textContent);
       expect(pills.some(t => t.includes('+1 Inspiration') && t.includes('For a natural 20') && t.includes('Tap ✦ up top'))).toBe(true);
-      expect(fixture.nativeElement.querySelector('.hud-button').textContent).toContain('2');
+      // The ✦ counter shows up with the first ✦, even before Getting started is done.
+      expect(fixture.nativeElement.querySelector('.hud-button').textContent).toContain('1');
     });
 
     it('keeps a natural 1\'s crack through practice rolls until a reroll replaces it', async () => {
+      app.skipTour();
       dice.next = [1];
       await app.roll();
       expect(app.crack).not.toBeNull();
@@ -378,6 +382,89 @@ describe('AppComponent', () => {
     });
   });
 
+  describe('Getting started', () => {
+    const el = () => fixture.nativeElement as HTMLElement;
+    const steps = (root: Element) => [...root.querySelectorAll('.tour-list li')]
+      .map(li => (li.classList.contains('is-done') ? '✓ ' : '') + li.firstChild!.textContent!.trim());
+
+    beforeEach(async () => {
+      vi.setSystemTime(new Date(2026, 8, 10, 9));
+      await setup();
+    });
+
+    afterEach(() => vi.useRealTimers());
+
+    it('walks a new player through a roll, the quest and a second day, then gives the first ✦', async () => {
+      const card = el().querySelector('.tour-card')!;
+      expect(card.textContent).toContain('Welcome to the table');
+      expect(steps(card)).toEqual(['Roll today\'s motivation', 'Finish today\'s quest', 'Come back tomorrow']);
+      expect(el().querySelector('.hud-button')).toBeNull();
+      expect(el().querySelector('.topbar .btn-primary')!.classList).toContain('is-calling');
+
+      dice.next = [12];
+      await app.roll();
+      fixture.detectChanges();
+      expect(el().querySelector('.tour-card')).toBeNull();
+      expect(el().querySelector('.tour-pill')!.textContent).toContain('Getting started · 1 of 3');
+
+      (el().querySelector('.quest-check') as HTMLInputElement).click();
+      fixture.detectChanges();
+      expect(el().querySelector('.tour-pill')!.textContent).toContain('2 of 3');
+      expect(app.stats.inspiration.held).toBe(0);
+
+      vi.setSystemTime(new Date(2026, 8, 11, 9));
+      app.onVisibilityChange();
+      fixture.detectChanges();
+      expect(el().querySelector('.tour-card')!.textContent).toContain('Welcome back');
+
+      await app.roll();
+      fixture.detectChanges();
+      expect(app.result!.inspiration).toEqual({reasons: ['tour'], kept: 1, first: true});
+      expect(el().querySelector('.result-badge-hint')!.textContent).toContain('Save it for a day you don\'t like');
+      expect(el().querySelector('.hud-button')!.textContent).toContain('1');
+      expect(el().querySelector('.tour-pill')).toBeNull();
+      expect(app.announcement).toContain('Plus 1 Inspiration');
+    });
+
+    it('can be finished in any order', async () => {
+      await app.roll();
+      vi.setSystemTime(new Date(2026, 8, 11, 9));
+      await app.roll();
+      expect(app.stats.tour.finished).toBe(false);
+      fixture.detectChanges();
+      (el().querySelector('.quest-check') as HTMLInputElement).click();
+      fixture.detectChanges();
+      expect(app.stats.tour.finished).toBe(true);
+      expect(app.result!.inspiration).toEqual({reasons: ['tour'], kept: 1, first: true});
+    });
+
+    it('can be skipped, which still gives the first ✦', () => {
+      (el().querySelector('.tour-skip') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(el().querySelector('.tour-card')).toBeNull();
+      expect(el().querySelector('.hud-button')!.textContent).toContain('1');
+    });
+
+    it('lists the steps in a dialog from the pill', async () => {
+      await app.roll();
+      fixture.detectChanges();
+      (el().querySelector('.tour-pill') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      const dialog = el().querySelector('dialog[aria-labelledby="tour-title"]') as HTMLDialogElement;
+      expect(dialog.open).toBe(true);
+      expect(steps(dialog)).toEqual(['✓ Roll today\'s motivation', 'Finish today\'s quest', 'Come back tomorrow']);
+    });
+
+    it('swaps the quest step for the stats when the daily quest is off', async () => {
+      app.setQuests(false);
+      fixture.detectChanges();
+      expect(steps(el().querySelector('.tour-card')!)[1]).toBe('Look at your stats');
+      app.openStats();
+      fixture.detectChanges();
+      expect(steps(el().querySelector('.tour-card')!)[1]).toBe('✓ Look at your stats');
+    });
+  });
+
   describe('the calendar', () => {
     const el = () => fixture.nativeElement as HTMLElement;
     const key = (k: string) => (el().querySelector('.calendar-day[tabindex="0"]') as HTMLElement)
@@ -481,6 +568,7 @@ describe('AppComponent', () => {
     it('earns a ✦ for a roll of 15 or more on an Inspired day', async () => {
       condition = 'inspired';
       await setup();
+      app.skipTour();
       dice.next = [15];
       await app.roll();
       expect(app.result!.inspiration).toEqual(expect.objectContaining({reasons: ['inspired'], kept: 1}));

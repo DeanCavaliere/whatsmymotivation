@@ -120,7 +120,7 @@ Chunk 2 comes early because Halloween (October) is three weeks away.
 
 ### 6. Inspiration (replaces the nudge)
 
-Decided at review: the free weekly nudge is gone. **Reroll** replaces today's roll and always costs one ✦. Everyone starts with one ✦ (a tutorial that awards it could come later).
+Decided at review: the free weekly nudge is gone. **Reroll** replaces today's roll and always costs one ✦. The first ✦ now comes from finishing **Getting started** (roll, finish the quest, come back another day; option A at review), or from skipping it. The ✦ counter stays hidden and table conditions hold off until then.
 
 - **Inspiration tokens (✦)**:
    - Earned: one for a natural 20 on the day's roll, one for every 7th day of streak (7, 14, 21…).

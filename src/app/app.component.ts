@@ -9,6 +9,7 @@ import {CalendarDay, CalendarMonth, calendarMonth, earliestMonth, shiftMonth} fr
 import {CrackPath, crackPaths} from './crack';
 import {formatAverage, formatCount, formatDate, formatPercent} from './format';
 import {NOTE_LIMIT, questById} from './quests';
+import {TourItem, tourDone, tourItems} from './tour';
 import {activeSeason, Season, seasonKey, SEASONS} from './seasons';
 import {shareText} from './share';
 import {DiceService} from './dice.service';
@@ -141,6 +142,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   @ViewChild('rerollDialog', {static: true}) rerollDialogRef!: ElementRef<HTMLDialogElement>;
   @ViewChild('inspirationDialog', {static: true}) inspirationDialogRef!: ElementRef<HTMLDialogElement>;
   @ViewChild('conditionDialog', {static: true}) conditionDialogRef!: ElementRef<HTMLDialogElement>;
+  @ViewChild('tourDialog', {static: true}) tourDialogRef!: ElementRef<HTMLDialogElement>;
   @ViewChild(TableWeatherComponent) weather?: TableWeatherComponent;
 
   /** `label` is shortened to fit the top bar; screen readers get `name`. */
@@ -171,6 +173,14 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly noteLimit = NOTE_LIMIT;
   /** Whether today's saved note is open for editing on the felt. */
   editingNote = false;
+  /** Getting started, while it's under way; null once it's finished or skipped. */
+  tour: TourItem[] | null = null;
+  /** Briefly true when a step of Getting started ticks off. */
+  tourTicked = false;
+  /** Briefly true when the ✦ counter first appears. */
+  inspirationNew = false;
+  /** How many steps of Getting started were ticked last time, so a new tick can show itself. */
+  private tourSeen = 0;
 
   ready = false;
   rolling = false;
@@ -219,6 +229,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private shakeTimer?: ReturnType<typeof setTimeout>;
   private joltTimer?: ReturnType<typeof setTimeout>;
   private drainTimer?: ReturnType<typeof setTimeout>;
+  private tourTimer?: ReturnType<typeof setTimeout>;
+  private inspirationTimer?: ReturnType<typeof setTimeout>;
   private resizeObserver?: ResizeObserver;
   private reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
 
@@ -237,6 +249,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.condition = previewCondition() ?? this.statsService.condition();
     this.stats = this.statsService.load();
     this.refreshDerived();
+    this.tourSeen = this.tour ? tourDone(this.tour) : 0;
     const today = this.today;
     if (today) {
       this.result = {
@@ -272,6 +285,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     clearTimeout(this.shakeTimer);
     clearTimeout(this.joltTimer);
     clearTimeout(this.drainTimer);
+    clearTimeout(this.tourTimer);
+    clearTimeout(this.inspirationTimer);
     this.resizeObserver?.disconnect();
   }
 
@@ -345,6 +360,34 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return this.prefs.rerolls && !!this.today && this.stats.inspiration.held >= 1;
   }
 
+  /** The ✦ counter stays out of the header until the first ✦ is earned. */
+  get showInspiration(): boolean {
+    return this.prefs.rerolls && (this.stats.tour.finished || this.stats.inspiration.earned > 0);
+  }
+
+  /** The checklist sits on the empty felt, until the dice are thrown. */
+  get showTourCard(): boolean {
+    return !!this.tour && !this.result && !this.rolling;
+  }
+
+  get tourStepsDone(): number {
+    return this.tour ? tourDone(this.tour) : 0;
+  }
+
+  openTour(): void {
+    this.tourDialogRef.nativeElement.showModal();
+  }
+
+  /** For anyone who already knows the game: hands over the first ✦ and hides the checklist. */
+  skipTour(): void {
+    this.tourDialogRef.nativeElement.close();
+    this.stats = this.statsService.finishTour();
+    this.refreshDerived();
+    this.flashInspiration();
+    this.announcement = 'Getting started skipped. You have your first Inspiration.';
+    this.showToast('Here\'s your first ✦ Inspiration.');
+  }
+
   openInspiration(): void {
     this.inspirationDialogRef.nativeElement.showModal();
   }
@@ -384,7 +427,6 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.sessionRolls++;
       const isDayRoll = reroll || !before;
       const reasons = isDayRoll ? inspirationReasons(value, sides, this.stats.streak.current, !reroll, this.condition) : [];
-      const kept = this.stats.inspiration.held - (held - (reroll ? 1 : 0));
       const badges = newBadges(this.stats, {
         values, value, sides, mode, isDayRoll, rerolledFrom: reroll && before ? before.value : null,
         condition: this.condition, date: localDateKey(new Date()),
@@ -393,6 +435,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         this.stats = this.statsService.award(badges.map(b => b.id));
       }
       this.refreshDerived();
+      // The day's roll can tick off Getting started, and finishing it brings the first ✦.
+      if (!reroll && !before && this.advanceTour() !== null) {
+        reasons.push('tour');
+      }
+      const kept = this.stats.inspiration.held - (held - (reroll ? 1 : 0));
 
       const verdict = verdictFor(value, sides, Math.random, this.season?.messages);
       this.result = {
@@ -466,6 +513,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.calendar = null;
     this.refreshStatsView();
     this.statsDialogRef.nativeElement.showModal();
+    if (this.tour && !this.stats.tour.sawStats) {
+      this.stats = this.statsService.sawStats();
+      this.announcement = '';
+      this.rewardTour(this.advanceTour());
+    }
   }
 
   setStatsTab(tab: StatsTab): void {
@@ -535,7 +587,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   /** "For a natural 20 and a 14-day streak" */
   inspirationReason(gain: InspirationGain, sides: DieSides): string {
-    const text = {natural: `a natural ${sides}`, streak: `a ${this.streak}-day streak`, inspired: 'a high roll on an Inspired day'};
+    const text = {
+      natural: `a natural ${sides}`,
+      streak: `a ${this.streak}-day streak`,
+      inspired: 'a high roll on an Inspired day',
+      tour: 'finishing Getting started',
+    };
     return 'For ' + gain.reasons.map(r => text[r]).join(' and ');
   }
 
@@ -568,8 +625,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
     this.stats = this.statsService.setQuestDone(this.today.date, done);
     this.refreshDerived();
+    this.announcement = '';
     this.awardBadges();
     if (done) {
+      this.rewardTour(this.advanceTour());
       // The note field appears once the quest is ticked.
       setTimeout(() => document.getElementById('quest-note')?.focus());
     }
@@ -585,6 +644,51 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.editingNote = false;
     this.refreshDerived();
     this.awardBadges();
+  }
+
+  /**
+   * Moves Getting started along after something its checklist counts. Finishing it gives the first ✦;
+   * returns how many ✦ that added (0 when full), or null when it isn't finished.
+   */
+  private advanceTour(): number | null {
+    const items = tourItems(this.stats, this.prefs.quests);
+    if (!items) {
+      return null;
+    }
+    const done = tourDone(items);
+    if (done === items.length) {
+      const held = this.stats.inspiration.held;
+      this.stats = this.statsService.finishTour();
+      this.refreshDerived();
+      this.flashInspiration();
+      return this.stats.inspiration.held - held;
+    }
+    if (done > this.tourSeen) {
+      this.tourTicked = true;
+      clearTimeout(this.tourTimer);
+      this.tourTimer = setTimeout(() => this.tourTicked = false, 900);
+    }
+    this.tourSeen = done;
+    this.tour = items;
+    return null;
+  }
+
+  /** Shows the first ✦ when Getting started finishes away from a roll, e.g. on ticking the quest. */
+  private rewardTour(kept: number | null): void {
+    if (kept === null) {
+      return;
+    }
+    if (this.result) {
+      this.result = {...this.result, inspiration: {reasons: ['tour'], kept, first: true}};
+    }
+    this.announcement = `${this.announcement} Getting started done. Plus ${kept} Inspiration.`.trim();
+    this.sound.badgeUnlocked();
+  }
+
+  private flashInspiration(): void {
+    this.inspirationNew = true;
+    clearTimeout(this.inspirationTimer);
+    this.inspirationTimer = setTimeout(() => this.inspirationNew = false, 800);
   }
 
   /** Badges that come from quests and notes rather than a roll. */
@@ -711,6 +815,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   setQuests(quests: boolean): void {
     this.prefs = {...this.prefs, quests};
     this.prefsService.save(this.prefs);
+    // Getting started swaps its quest step for a stats step.
+    this.refreshDerived();
+    this.announcement = '';
+    this.rewardTour(this.advanceTour());
   }
 
   setRerolls(rerolls: boolean): void {
@@ -748,6 +856,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.today = todayRoll(this.stats);
     this.streak = activeStreak(this.stats);
     this.streakAtRisk = streakAtRisk(this.stats);
+    this.tour = tourItems(this.stats, this.prefs.quests);
     this.refreshStatsView();
     this.refreshCrack();
   }
