@@ -1,0 +1,8 @@
+<canvas #under class="under" aria-hidden="true"></canvas>
+<canvas #over class="over" aria-hidden="true"></canvas>
+<div class="flash" [class.is-on]="flashing" aria-hidden="true"></div>
+<canvas #fog class="fog" [class.is-on]="fogged" aria-hidden="true"
+  (pointerdown)="onFogDown($event)" (pointermove)="onFogMove($event)" (pointerup)="onFogUp()" (pointercancel)="onFogUp()"></canvas>
+@if (fogged) {
+  <button type="button" class="btn btn-ghost btn-small fog-button" (click)="clearFog()">Clear the fog</button>
+}

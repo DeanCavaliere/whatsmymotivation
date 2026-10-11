@@ -64,12 +64,17 @@ export const MESSAGES: Record<Tier, readonly string[]> = {
 export function tierFor(value: number, sides: DieSides = 20): Tier {
   if (value <= 1) return 'crit-fail';
   if (value >= sides) return 'crit-success';
-  const scaled = Math.round(1 + (value - 1) * 19 / (sides - 1));
+  const scaled = d20Scale(value, sides);
   if (scaled <= 5) return 'very-low';
   if (scaled <= 8) return 'low';
   if (scaled <= 11) return 'mid';
   if (scaled <= 14) return 'high';
   return 'very-high';
+}
+
+/** Where a face sits on the d20's 1-20 scale, so a 3 on a d4 reads as a 14. */
+export function d20Scale(value: number, sides: DieSides): number {
+  return Math.round(1 + (value - 1) * 19 / (sides - 1));
 }
 
 /** Chance of each outcome on a single roll of the die. */

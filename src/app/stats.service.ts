@@ -1,5 +1,6 @@
 import {Inject, Injectable, InjectionToken} from '@angular/core';
-import {DIE_SIDES, DieSides, isDieSides, RollMode} from './motivation';
+import {DayCondition, INSPIRED_AT, isDayCondition, pruneConditions, rollCondition} from './conditions';
+import {d20Scale, DIE_SIDES, DieSides, isDieSides, RollMode} from './motivation';
 
 export type KeyValueStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
@@ -75,8 +76,11 @@ export interface Inspiration {
   earned: number;
 }
 
-/** Why a roll earned ✦: a natural top face as the day's roll, or every STREAK_STEP-th day of a streak. */
-export type InspirationReason = 'natural' | 'streak';
+/**
+ * Why a roll earned ✦: a natural top face as the day's roll, every STREAK_STEP-th day of a streak,
+ * or a high roll on an Inspired day.
+ */
+export type InspirationReason = 'natural' | 'streak' | 'inspired';
 
 export const INSPIRATION_CAP = 3;
 export const STREAK_STEP = 7;
@@ -96,6 +100,8 @@ export interface Stats {
   streak: Streak;
   rerolls: Rerolls;
   inspiration: Inspiration;
+  /** Each day's table condition, rolled on the first visit that day. */
+  conditions: Record<string, DayCondition>;
   /** Badge id → the local date it was earned. */
   achievements: Record<string, string>;
 }
@@ -127,6 +133,7 @@ export function emptyStats(): Stats {
     streak: {current: 0, best: 0, lastDate: null},
     rerolls: {used: 0, better: 0, worse: 0},
     inspiration: {held: 1, earned: 0},
+    conditions: {},
     achievements: {},
   };
 }
@@ -150,16 +157,19 @@ export function addDays(dateKey: string, days: number): string {
 }
 
 /**
- * What a day's roll earns. A first roll can earn for both; a reroll only for a natural top face,
- * since it doesn't move the streak.
+ * What a day's roll earns. A reroll can't earn for the streak, since it doesn't move it.
  */
-export function inspirationReasons(value: number, sides: DieSides, streak: number, firstRollOfDay: boolean): InspirationReason[] {
+export function inspirationReasons(value: number, sides: DieSides, streak: number, firstRollOfDay: boolean,
+                                   condition: DayCondition = 'clear'): InspirationReason[] {
   const reasons: InspirationReason[] = [];
   if (value === sides) {
     reasons.push('natural');
   }
   if (firstRollOfDay && streak > 0 && streak % STREAK_STEP === 0) {
     reasons.push('streak');
+  }
+  if (condition === 'inspired' && d20Scale(value, sides) >= INSPIRED_AT) {
+    reasons.push('inspired');
   }
   return reasons;
 }
@@ -300,6 +310,18 @@ function sanitizeInspiration(raw: unknown): Inspiration {
   return {held: Math.min(INSPIRATION_CAP, Math.floor(n.held)), earned: count(n.earned)};
 }
 
+function sanitizeConditions(raw: unknown): Record<string, DayCondition> {
+  const conditions: Record<string, DayCondition> = {};
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    for (const [date, condition] of Object.entries(raw)) {
+      if (isDateKey(date) && isDayCondition(condition)) {
+        conditions[date] = condition;
+      }
+    }
+  }
+  return conditions;
+}
+
 function sanitizeAchievements(raw: unknown): Record<string, string> {
   const achievements: Record<string, string> = {};
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
@@ -335,6 +357,7 @@ export function sanitize(raw: unknown): Stats {
   }
   stats.rerolls = sanitizeRerolls(r['rerolls']);
   stats.inspiration = sanitizeInspiration(r['inspiration']);
+  stats.conditions = sanitizeConditions(r['conditions']);
   stats.achievements = sanitizeAchievements(r['achievements']);
   return stats;
 }
@@ -367,7 +390,7 @@ export class StatsService {
    * The first roll of each local day becomes that day's roll, extends the streak,
    * and may earn ✦ (see `inspirationReasons`).
    */
-  record(value: number, sides: DieSides, mode: RollMode, now: Date = new Date()): Stats {
+  record(value: number, sides: DieSides, mode: RollMode, now: Date = new Date(), condition: DayCondition = 'clear'): Stats {
     if (!isDieSides(sides) || !isFace(value, sides)) {
       throw new Error(`Not a d${sides} value: ${value}`);
     }
@@ -388,7 +411,8 @@ export class StatsService {
       streak.lastDate = date;
     }
     if (firstRollOfDay) {
-      stats.inspiration = earn(stats.inspiration, inspirationReasons(value, sides, streak.current, true).length);
+      const reasons = inspirationReasons(value, sides, streak.current, true, condition);
+      stats.inspiration = earn(stats.inspiration, reasons.length);
     }
     this.save(stats);
     return stats;
@@ -398,7 +422,7 @@ export class StatsService {
    * Spends one ✦ to replace today's roll with a new one. The reroll counts as a roll like any
    * other; the daily stats swap the old roll for the new one. A natural top face earns a ✦ back.
    */
-  reroll(value: number, sides: DieSides, mode: RollMode, now: Date = new Date()): Stats {
+  reroll(value: number, sides: DieSides, mode: RollMode, now: Date = new Date(), condition: DayCondition = 'clear'): Stats {
     if (!isDieSides(sides) || !isFace(value, sides)) {
       throw new Error(`Not a d${sides} value: ${value}`);
     }
@@ -425,9 +449,23 @@ export class StatsService {
       worse: rerolls.worse + (change < 0 ? 1 : 0),
     };
     const spent = {...stats.inspiration, held: stats.inspiration.held - 1};
-    stats.inspiration = earn(spent, inspirationReasons(value, sides, stats.streak.current, false).length);
+    stats.inspiration = earn(spent, inspirationReasons(value, sides, stats.streak.current, false, condition).length);
     this.save(stats);
     return stats;
+  }
+
+  /** Today's table condition, rolled and stored on the first visit of the day. */
+  condition(now: Date = new Date(), random: () => number = Math.random): DayCondition {
+    const stats = this.load();
+    const date = localDateKey(now);
+    const known = stats.conditions[date];
+    if (known) {
+      return known;
+    }
+    const condition = rollCondition(stats.conditions, date, random);
+    stats.conditions = {...pruneConditions(stats.conditions, date, DAYS_LIMIT), [date]: condition};
+    this.save(stats);
+    return condition;
   }
 
   /** Records badges as earned today. Re-reads storage first, like a roll. */

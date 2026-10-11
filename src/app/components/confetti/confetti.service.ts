@@ -1,11 +1,8 @@
 import {Injectable} from '@angular/core';
 import {Subject} from 'rxjs';
 
-/**
- * `burst` and `big-burst` fly out from a point; `fall` drifts down from the top of the screen
- * (kept for weather effects).
- */
-export type ConfettiKind = 'burst' | 'big-burst' | 'fall';
+/** Both fly out from a point; the big one is for a natural top face. */
+export type ConfettiKind = 'burst' | 'big-burst';
 
 export interface ConfettiTrigger {
   kind: ConfettiKind;

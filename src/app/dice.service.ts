@@ -63,6 +63,11 @@ export class DiceService {
     }
   }
 
+  /** 1 is normal; lower makes the dice float and take longer to settle. */
+  setGravity(gravity: number): void {
+    this.zone.runOutsideAngular(() => this.box?.updateConfig({gravity}));
+  }
+
   /** Resolves with every die's value (one for normal, two for advantage/disadvantage). */
   async roll(mode: RollMode, sides: DieSides = 20, themeColor?: string): Promise<number[]> {
     const values = await this.throwDice(mode, sides, themeColor);

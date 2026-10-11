@@ -34,7 +34,8 @@
             ],
             "styles": [
               "src/styles.css",
-              "src/panels.css"
+              "src/panels.css",
+              "src/doodles.css"
             ],
             "scripts": [],
             "browser": "src/main.ts"
@@ -44,7 +45,7 @@
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "500kb",
+                  "maximumWarning": "600kb",
                   "maximumError": "1mb"
                 },
                 {

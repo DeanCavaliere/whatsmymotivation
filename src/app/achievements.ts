@@ -1,5 +1,6 @@
+import {DayCondition} from './conditions';
 import {DIE_SIDES, DieSides, RollMode} from './motivation';
-import {addDays, INSPIRATION_CAP, Stats} from './stats.service';
+import {addDays, dateFromKey, INSPIRATION_CAP, Stats} from './stats.service';
 
 /** The roll that was just recorded, with both dice when rolling with advantage or disadvantage. */
 export interface RollContext {
@@ -13,6 +14,8 @@ export interface RollContext {
   isDayRoll: boolean;
   /** The day's roll this one replaced, when it was a reroll. */
   rerolledFrom: number | null;
+  /** Today's table condition. */
+  condition: DayCondition;
   /** Local date, YYYY-MM-DD. */
   date: string;
 }
@@ -37,6 +40,14 @@ export interface Badge {
 }
 
 const twoDice = (roll: RollContext) => roll.values.length === 2;
+/** Days with a roll that had this condition. */
+const rolledDaysWith = (stats: Stats, condition: DayCondition) => stats.days.filter(d => stats.conditions[d.date] === condition).length;
+
+/** The Sunday-to-Saturday week around `date`, as YYYY-MM-DD keys. */
+function weekOf(date: string): string[] {
+  const sunday = addDays(date, -dateFromKey(date).getDay());
+  return Array.from({length: 7}, (_, i) => addDays(sunday, i));
+}
 const diceRolled = (stats: Stats) => DIE_SIDES.filter(sides => (stats.counts[sides] ?? []).some(n => n > 0)).length;
 
 function streakBadge(id: string, icon: string, name: string, days: number): Badge {
@@ -121,6 +132,25 @@ export const BADGES: readonly Badge[] = [
     id: 'lucky-reroll', icon: '🍀', name: 'Lucky reroll',
     description: 'Reroll a natural 1 into the top face.',
     earned: (_, roll) => roll.rerolledFrom === 1 && roll.value === roll.sides,
+  },
+  {
+    id: 'fogwalker', icon: '🌫️', name: 'Fogwalker',
+    description: 'Roll on 5 foggy days.',
+    earned: stats => rolledDaysWith(stats, 'foggy') >= 5,
+    progress: stats => ({current: Math.min(rolledDaysWith(stats, 'foggy'), 5), goal: 5, unit: 'days'}),
+  },
+  {
+    id: 'storm-chaser', icon: '⚡', name: 'Storm chaser',
+    description: 'Roll your die\'s top face as the day\'s roll on a stormy day.',
+    earned: (_, roll) => roll.isDayRoll && roll.condition === 'stormy' && roll.value === roll.sides,
+  },
+  {
+    id: 'blessed-and-cursed', icon: '☯️', name: 'Blessed and cursed',
+    description: 'Have a Blessed day and a Hexed day in the same week.',
+    earned: (stats, roll) => {
+      const week = weekOf(roll.date).map(d => stats.conditions[d]);
+      return week.includes('blessed') && week.includes('hexed');
+    },
   },
 ];
 

@@ -5,6 +5,36 @@ export type ConditionId = 'foggy' | 'rainy' | 'snowy' | 'stormy' | 'low-gravity'
 /** A day's roll for its condition: one of the above, or a plain day. */
 export type DayCondition = ConditionId | 'clear';
 
+export interface ConditionInfo {
+  icon: string;
+  name: string;
+  /** What it does, shown when the pill on the felt is tapped. */
+  description: string;
+}
+
+/** On an Inspired day, a day's roll this high (on the d20 scale) earns ✦. */
+export const INSPIRED_AT = 15;
+
+export const CONDITIONS: Readonly<Record<ConditionId, ConditionInfo>> = {
+  'foggy': {icon: '🌫️', name: 'Foggy', description: 'A mist has rolled over the table. Your roll lands hidden; wipe the fog away to see it.'},
+  'rainy': {icon: '🌧️', name: 'Rainy', description: 'Rain on the table today. Just for looks; your dice are waterproof.'},
+  'snowy': {icon: '❄️', name: 'Snowy', description: 'Snow drifts down and gathers along the edge of the table. Just for looks.'},
+  'stormy': {icon: '⛈️', name: 'Stormy', description: 'Rain and the odd flash of lightning. Roll your die\'s top face to call down a strike.'},
+  'low-gravity': {icon: '🪐', name: 'Low gravity', description: 'The dice float, bounce higher and take their time to settle.'},
+  'inspired': {icon: '✨', name: 'Inspired', description: `A day's roll of ${INSPIRED_AT} or more (like a ${INSPIRED_AT} on a d20) earns a ✦ Inspiration.`},
+  'blessed': {icon: '😇', name: 'Blessed', description: 'Today\'s roll is made with advantage: two dice, and you keep the higher.'},
+  'hexed': {icon: '🧿', name: 'Hexed', description: 'Today\'s roll is made with disadvantage: two dice, and you keep the lower.'},
+};
+
+export function isDayCondition(value: unknown): value is DayCondition {
+  return value === 'clear' || (typeof value === 'string' && value in CONDITIONS);
+}
+
+/** Blessed and Hexed decide the roll mode for the day's roll. */
+export function forcedMode(condition: DayCondition): 'advantage' | 'disadvantage' | null {
+  return condition === 'blessed' ? 'advantage' : condition === 'hexed' ? 'disadvantage' : null;
+}
+
 /** How common each condition is, relative to the others. Snowy takes Rainy's place in Dec–Feb. */
 export const CONDITION_WEIGHTS: Readonly<Record<Exclude<ConditionId, 'snowy'>, number>> = {
   'foggy': 3,

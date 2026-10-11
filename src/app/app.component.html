@@ -30,10 +30,17 @@
     </dl>
 
     <div class="controls">
-      <div class="segmented" role="group" aria-label="Roll mode">
+      <div class="segmented" role="group"
+        [attr.aria-label]="lockedMode && conditionInfo ? 'Roll mode, set to ' + lockedMode + ' while ' + conditionInfo.name : 'Roll mode'">
         @for (m of modes; track m.value) {
-          <button type="button" [attr.aria-pressed]="mode === m.value" [attr.aria-label]="m.name" [title]="m.hint"
-            [disabled]="rolling" (click)="setMode(m.value)">{{ m.label }}</button>
+          <button type="button" [attr.aria-pressed]="(lockedMode ?? mode) === m.value" [attr.aria-label]="m.name"
+            [title]="lockedMode && conditionInfo ? conditionInfo.name + ': today\'s roll uses ' + lockedMode : m.hint"
+            [disabled]="rolling || !!lockedMode" (click)="setMode(m.value)">
+            @if (lockedMode === m.value) {
+              <svg class="mode-lock" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="5.5" width="8" height="5.5" rx="1"/><path d="M4 5.5V4a2 2 0 0 1 4 0v1.5"/></svg>
+            }
+            {{ m.label }}
+          </button>
         }
       </div>
       <button type="button" class="btn btn-primary" (click)="roll()" [disabled]="!ready || rolling">
@@ -101,6 +108,13 @@
           }
         </g>
       </svg>
+    }
+
+    <app-table-weather [condition]="condition" [throwCount]="throwCount"/>
+    @if (conditionInfo; as c) {
+      <button type="button" class="condition-pill" (click)="openCondition()" aria-haspopup="dialog">
+        <span aria-hidden="true">{{ c.icon }}</span> {{ c.name }} today
+      </button>
     }
 
     <section class="result" aria-label="Result">
@@ -295,6 +309,9 @@
                   }
                 } @else {
                   <p>No roll this day.</p>
+                }
+                @if (conditionOn(calendarDay); as c) {
+                  <p><span aria-hidden="true">{{ c.icon }}</span> {{ c.name }} day</p>
                 }
               </div>
             </section>
@@ -650,6 +667,21 @@
       <button type="button" class="btn btn-ghost" autofocus (click)="rerollDialog.close()">Keep my {{ today?.value }}</button>
       <button type="button" class="btn btn-primary" (click)="reroll()">Reroll</button>
     </div>
+  </div>
+</dialog>
+
+<dialog #conditionDialog class="panel panel-small" aria-labelledby="condition-title" (click)="onDialogClick($event)">
+  <div class="panel-body">
+    <header class="panel-header">
+      <h2 id="condition-title">
+        @if (conditionInfo; as c) {
+          <span aria-hidden="true">{{ c.icon }}</span> {{ c.name }} today
+        }
+      </h2>
+      <button type="button" class="btn btn-ghost btn-small" (click)="conditionDialog.close()" aria-label="Close"><span aria-hidden="true">✕</span></button>
+    </header>
+    <p class="panel-note">{{ conditionInfo?.description }}</p>
+    <p class="panel-note">Every table gets its own conditions, about eight days a month. This one lasts until midnight.</p>
   </div>
 </dialog>
 

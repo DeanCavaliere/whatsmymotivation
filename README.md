@@ -18,7 +18,8 @@ Live at [whatsmymotivation.today](https://whatsmymotivation.today).
 - Accent colors (Copper, Arcane, Ember, Jade, Rose), table themes and dice colors (Settings). The felt is one neutral texture tinted with CSS `background-blend-mode`, so a new table color is a one-line addition to `prefs.service.ts`
 - Seasonal tables (on by default): Spooky in October, Festive in December, Valentine's Feb 10–14 and Lucky Mar 15–17 each bring their own felt, chalk, dice color, corner doodles and messages. Picking your own table or dice turns the current season off until it ends. Seasons are data in `seasons.ts`
 - Sound (on by default, with a mute button in the header): recorded dice from Kenney's CC0 Casino Audio pack, softened for felt and chained into a short tumble, plus a synthesized fanfare for a natural top face and a sad trombone for a 1. Follows the iPhone silent switch. Vibration on Android, off under reduced motion
-- Badges (Stats › Badges): fifteen to start, from First roll to a 100-day streak and 1,000 rolls, defined in `achievements.ts`. Unlocks show on the table with a tick sound
+- Daily table conditions: about eight days a month, each player's table rolls its own condition (Foggy, Rainy or Snowy, Stormy, Low gravity, Inspired, Blessed, Hexed), shown as a pill on the felt. Fog hides the result until wiped; Blessed and Hexed set the day's roll mode; Inspired turns a high roll into ✦. The odds are in `conditions.ts`
+- Badges (Stats › Badges): eighteen to start, from First roll to a 100-day streak and 1,000 rolls, defined in `achievements.ts`. Unlocks show on the table with a tick sound
 - Rolls only happen from the Roll button, so a stray key press or tap can't replace the day's roll
 - A natural top face bursts confetti from the number; a natural 1 jolts the table, drains its color and leaves a crack that stays all day while that 1 is the day's roll
 - Accessible: text meets WCAG AA contrast on every table theme, chosen options are marked by more than color, results are announced to screen readers, the chart has a table equivalent, and it supports keyboard focus, forced colors and reduced motion
@@ -31,7 +32,8 @@ Requires Node 22 or 24 (see `.nvmrc`).
 npm install
 npm start          # dev server on http://localhost:4405
 npm test           # unit tests (Vitest + jsdom)
-# Dev server only: /?rolls=20,1 queues the next results, /?season=festive previews a season
+# Dev server only: /?rolls=20,1 queues the next results, /?season=festive previews a season,
+# /?condition=foggy sets today's table condition
 npm run build      # production build into dist/whatsmymotivation
 ```
 
@@ -46,7 +48,7 @@ Pushing to `master` deploys to GitHub Pages via `.github/workflows/workflow.yml`
 | `src/panels.css` | Styles for the stats and settings dialogs |
 | `src/app/prefs.service.ts` | Die choice, table themes, dice colors and the saved choice |
 | `src/app/dice.service.ts` | dice-box wrapper: init, physics tuning, fallback |
-| `src/app/components/confetti` | Canvas confetti bursts (and a falling mode, kept for weather) |
+| `src/app/components/confetti` | Canvas confetti bursts |
 | `src/assets/img` | Table artwork (WebP). The frame is drawn as a CSS 9-slice `border-image` |
 | `src/assets/icons`, `src/manifest.webmanifest` | App icons and web app manifest for installing to a home screen |
 | `node_modules/@3d-dice/dice-box/dist/assets` | dice-box physics (Ammo WASM) and dice themes, copied to `assets/dice-box` at build time |

@@ -172,7 +172,8 @@ Each player gets their own random condition each day. The condition is rolled th
 
 **Display:**
 
-- A condition chip in the header; tapping it explains the effect.
+- A pill at the top of the felt (chosen over a header chip, which doesn't fit phones); tapping it explains the effect.
+- Built: fog repaints at each throw and clears itself once about 45% is wiped, or with a "Clear the fog" button. Low gravity sets dice-box gravity to 0.35. Blessed/Hexed force the mode for the day's roll and rerolls, with a lock on the mode buttons. The calendar's day details name the condition.
 - The effect is announced to screen readers.
 - Reduced motion swaps the animated overlays for static ones.
 

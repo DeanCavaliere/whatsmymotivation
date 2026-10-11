@@ -2,7 +2,7 @@ import {BADGES, newBadges, RollContext} from './achievements';
 import {emptyStats, Stats} from './stats.service';
 
 function roll(value: number, extra: Partial<RollContext> = {}): RollContext {
-  return {values: [value], value, sides: 20, mode: 'normal', isDayRoll: true, rerolledFrom: null, date: '2026-10-10', ...extra};
+  return {values: [value], value, sides: 20, mode: 'normal', isDayRoll: true, rerolledFrom: null, condition: 'clear', date: '2026-10-10', ...extra};
 }
 
 function stats(extra: Partial<Stats> = {}): Stats {
@@ -70,6 +70,26 @@ describe('badges', () => {
     expect(ids(stats(), roll(20, {rerolledFrom: 1}))).toContain('lucky-reroll');
     expect(ids(stats(), roll(20, {rerolledFrom: 2}))).not.toContain('lucky-reroll');
     expect(ids(stats(), roll(20))).not.toContain('lucky-reroll');
+  });
+
+  it('give Fogwalker for rolling on five foggy days', () => {
+    const dates = ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05'];
+    const days = dates.map(date => ({date, value: 10, sides: 20 as const, mode: 'normal' as const}));
+    const foggy = (n: number) => Object.fromEntries(dates.slice(0, n).map(d => [d, 'foggy' as const]));
+    expect(ids(stats({days, conditions: foggy(4)}), roll(10))).not.toContain('fogwalker');
+    expect(ids(stats({days, conditions: foggy(5)}), roll(10))).toContain('fogwalker');
+  });
+
+  it('give Storm chaser for a natural top face as the day\'s roll in a storm', () => {
+    expect(ids(stats(), roll(20, {condition: 'stormy'}))).toContain('storm-chaser');
+    expect(ids(stats(), roll(20, {condition: 'stormy', isDayRoll: false}))).not.toContain('storm-chaser');
+    expect(ids(stats(), roll(20, {condition: 'rainy'}))).not.toContain('storm-chaser');
+  });
+
+  it('give Blessed and cursed for both in one Sunday-to-Saturday week', () => {
+    // 2026-10-04 is a Sunday.
+    expect(ids(stats({conditions: {'2026-10-05': 'blessed', '2026-10-09': 'hexed'}}), roll(10))).toContain('blessed-and-cursed');
+    expect(ids(stats({conditions: {'2026-10-03': 'blessed', '2026-10-09': 'hexed'}}), roll(10))).not.toContain('blessed-and-cursed');
   });
 
   it('are only new once', () => {

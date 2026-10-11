@@ -2,6 +2,8 @@ import {AfterViewInit, Component, ElementRef, HostListener, isDevMode, NgZone, O
 import {DatePipe, DecimalPipe, PercentPipe} from '@angular/common';
 import {SwUpdate} from '@angular/service-worker';
 import {ConfettiComponent} from './components/confetti/confetti.component';
+import {TableWeatherComponent} from './components/table-weather/table-weather.component';
+import {ConditionInfo, CONDITIONS, DayCondition, forcedMode, isDayCondition} from './conditions';
 import {ConfettiService} from './components/confetti/confetti.service';
 import {Badge, BADGES, newBadges, Progress} from './achievements';
 import {CalendarDay, CalendarMonth, calendarMonth, earliestMonth, shiftMonth} from './calendar';
@@ -128,7 +130,7 @@ interface CrackBox {
     templateUrl: './app.component.html',
     styleUrls: ['./app.component.css'],
     changeDetection: ChangeDetectionStrategy.Eager,
-    imports: [ConfettiComponent, DecimalPipe, DatePipe, PercentPipe]
+    imports: [ConfettiComponent, TableWeatherComponent, DecimalPipe, DatePipe, PercentPipe]
 })
 export class AppComponent implements AfterViewInit, OnDestroy {
   @ViewChild('table', {static: true}) tableRef!: ElementRef<HTMLElement>;
@@ -137,6 +139,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   @ViewChild('settingsDialog', {static: true}) settingsDialogRef!: ElementRef<HTMLDialogElement>;
   @ViewChild('rerollDialog', {static: true}) rerollDialogRef!: ElementRef<HTMLDialogElement>;
   @ViewChild('inspirationDialog', {static: true}) inspirationDialogRef!: ElementRef<HTMLDialogElement>;
+  @ViewChild('conditionDialog', {static: true}) conditionDialogRef!: ElementRef<HTMLDialogElement>;
+  @ViewChild(TableWeatherComponent) weather?: TableWeatherComponent;
 
   /** `label` is shortened to fit the top bar; screen readers get `name`. */
   readonly modes: { value: RollMode, label: string, name: string, hint: string }[] = [
@@ -155,6 +159,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly accentOf = accentColor;
   readonly inspirationCap = INSPIRATION_CAP;
   readonly streakStep = STREAK_STEP;
+  /** Today's table condition. */
+  condition: DayCondition = 'clear';
+  /** Counts throws, so a foggy table fogs over again for each one. */
+  throwCount = 0;
 
   ready = false;
   rolling = false;
@@ -218,6 +226,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.prefs = this.prefsService.load();
     this.applyTable();
     this.install = detectInstallOption();
+    this.condition = previewCondition() ?? this.statsService.condition();
     this.stats = this.statsService.load();
     this.refreshDerived();
     const today = this.today;
@@ -240,7 +249,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   ngAfterViewInit(): void {
-    this.dice.init(this.diceBoxRef.nativeElement).then(() => this.zone.run(() => this.ready = true));
+    this.dice.init(this.diceBoxRef.nativeElement).then(() => this.zone.run(() => {
+      this.ready = true;
+      this.applyGravity();
+    }));
     if (typeof ResizeObserver !== 'undefined') {
       this.resizeObserver = new ResizeObserver(() => this.zone.run(() => this.measureCrack()));
       this.resizeObserver.observe(this.tableRef.nativeElement);
@@ -287,9 +299,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (document.visibilityState !== 'visible') {
       return;
     }
+    // A new day brings a new condition, and a season may have started or ended overnight.
+    this.condition = previewCondition() ?? this.statsService.condition();
+    this.applyGravity();
     this.stats = this.statsService.load();
     this.refreshDerived();
-    // A season may have started or ended overnight.
     this.applyTable();
     if (this.result?.isToday && !this.today && !this.rolling) {
       this.result = null;
@@ -332,10 +346,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       return;
     }
     this.rolling = true;
+    this.throwCount++;
     this.result = null;
     this.refreshCrack();
     this.announcement = '';
-    const mode = this.mode;
+    // Blessed and Hexed decide the mode for the day's roll, rerolls included.
+    const mode = (reroll || !this.today ? forcedMode(this.condition) : null) ?? this.mode;
     const sides = this.prefs.sides;
     // Still inside the click, so the browser lets audio start.
     this.sound.diceThrown(mode === 'normal' ? 1 : 2);
@@ -346,7 +362,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       const previousBest = this.stats.streak.best;
       const {held, earned} = this.stats.inspiration;
       try {
-        this.stats = reroll ? this.statsService.reroll(value, sides, mode) : this.statsService.record(value, sides, mode);
+        this.stats = reroll
+          ? this.statsService.reroll(value, sides, mode, new Date(), this.condition)
+          : this.statsService.record(value, sides, mode, new Date(), this.condition);
       } catch {
         // Another tab spent the last ✦ (or rolled over midnight) while the dice were in the air.
         this.stats = this.statsService.load();
@@ -356,10 +374,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       }
       this.sessionRolls++;
       const isDayRoll = reroll || !before;
-      const reasons = isDayRoll ? inspirationReasons(value, sides, this.stats.streak.current, !reroll) : [];
+      const reasons = isDayRoll ? inspirationReasons(value, sides, this.stats.streak.current, !reroll, this.condition) : [];
       const kept = this.stats.inspiration.held - (held - (reroll ? 1 : 0));
       const badges = newBadges(this.stats, {
-        values, value, sides, mode, isDayRoll, rerolledFrom: reroll && before ? before.value : null, date: localDateKey(new Date()),
+        values, value, sides, mode, isDayRoll, rerolledFrom: reroll && before ? before.value : null,
+        condition: this.condition, date: localDateKey(new Date()),
       });
       if (badges.length) {
         this.stats = this.statsService.award(badges.map(b => b.id));
@@ -507,7 +526,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   /** "For a natural 20 and a 14-day streak" */
   inspirationReason(gain: InspirationGain, sides: DieSides): string {
-    const text = {natural: `a natural ${sides}`, streak: `a ${this.streak}-day streak`};
+    const text = {natural: `a natural ${sides}`, streak: `a ${this.streak}-day streak`, inspired: 'a high roll on an Inspired day'};
     return 'For ' + gain.reasons.map(r => text[r]).join(' and ');
   }
 
@@ -515,6 +534,25 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   badgeNames(badges: readonly Badge[]): string {
     const names = badges.map(b => b.name);
     return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0] ?? '';
+  }
+
+  get conditionInfo(): ConditionInfo | null {
+    return this.condition === 'clear' ? null : CONDITIONS[this.condition];
+  }
+
+  /** The mode Blessed or Hexed sets, while the day's roll is still to come. */
+  get lockedMode(): RollMode | null {
+    return this.today ? null : forcedMode(this.condition);
+  }
+
+  openCondition(): void {
+    this.conditionDialogRef.nativeElement.showModal();
+  }
+
+  /** A day's condition, for the calendar. */
+  conditionOn(date: string): ConditionInfo | null {
+    const condition = this.stats.conditions[date];
+    return condition && condition !== 'clear' ? CONDITIONS[condition] : null;
   }
 
   get calendarRoll(): DayRoll | null {
@@ -718,8 +756,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       if (celebration === 'burst' || celebration === 'big-burst') {
         const rect = this.tableRef.nativeElement.querySelector('.result-value')?.getBoundingClientRect();
         this.confetti.trigger(celebration, rect ? {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2} : undefined);
+        if (rect && celebration === 'big-burst' && this.condition === 'stormy') {
+          this.weather?.strike(rect.left + rect.width / 2, rect.top);
+        }
       }
     });
+  }
+
+  private applyGravity(): void {
+    this.dice.setGravity(this.condition === 'low-gravity' ? 0.35 : 1);
   }
 
   private applyTable(): void {
@@ -776,6 +821,15 @@ function chartBars(faces: number[]): ChartBar[] {
       labeled: n <= 12 || face === 1 || face % 5 === 0,
     };
   });
+}
+
+/** Dev builds only: ?condition=foggy sets today's table condition. */
+function previewCondition(): DayCondition | null {
+  if (!isDevMode()) {
+    return null;
+  }
+  const id = new URLSearchParams(location.search).get('condition');
+  return isDayCondition(id) ? id : null;
 }
 
 /** Dev builds only: ?season=festive shows that season on any date. */

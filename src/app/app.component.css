@@ -125,6 +125,39 @@
   cursor: default;
 }
 
+.mode-lock {
+  width: 11px;
+  height: 11px;
+  margin-right: 3px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  vertical-align: -1px;
+}
+
+/* Today's table condition, above the fog so it can always be tapped. */
+.condition-pill {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  z-index: 4;
+  translate: -50% 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 4px 9px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(10, 10, 12, 0.72);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
 .segmented-small button {
   min-height: 26px;
   font-size: 12px;
@@ -182,43 +215,6 @@
 .table-text.is-dimmed,
 .doodles.is-dimmed {
   opacity: 0.35;
-}
-
-/* ---------- Seasonal chalk doodles, one per corner ---------- */
-
-.doodles {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  transition: opacity 300ms ease;
-}
-
-.doodle {
-  position: absolute;
-  width: calc(var(--size) * clamp(56px, 22cqmin, 150px));
-  aspect-ratio: 1;
-  overflow: visible;
-  fill: none;
-  stroke: var(--chalk);
-  stroke-width: 5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  opacity: 0.75;
-}
-
-.doodle .is-filled {
-  fill: var(--chalk);
-  stroke: none;
-}
-
-/* Positive nudges move a doodle toward the middle of the table. */
-.doodle[data-corner="top-left"] { top: 3%; left: 3%; translate: var(--dx) var(--dy); }
-.doodle[data-corner="top-right"] { top: 3%; right: 3%; translate: calc(-1 * var(--dx)) var(--dy); }
-.doodle[data-corner="bottom-left"] { bottom: 3%; left: 3%; translate: var(--dx) calc(-1 * var(--dy)); }
-.doodle[data-corner="bottom-right"] { bottom: 3%; right: 3%; translate: calc(-1 * var(--dx)) calc(-1 * var(--dy)); }
-
-.doodle {
-  rotate: var(--rotate);
 }
 
 /* ---------- Natural 1: the table jolts, drains of color, and cracks ---------- */

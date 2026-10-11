@@ -27,11 +27,9 @@ interface Physics {
 const PHYSICS: Record<ConfettiKind, Physics> = {
   'big-burst': {count: 150, duration: 900, fade: 1200},
   'burst': {count: 50, duration: 600, fade: 900},
-  'fall': {count: 40, duration: 3000, fade: 1000},
 };
 
 const GOLD = ['#ffd54a', '#ffbf2e', '#fff1b0'];
-const FALL_COLORS = ['#ef1d27', '#009ee3', '#1f9c48', '#ffcd06'];
 /** Burst speed decays by e^-DRAG per second, so a piece travels about speed / DRAG pixels. */
 const DRAG = 2.1;
 const GRAVITY = 320;
@@ -86,8 +84,7 @@ export class ConfettiComponent implements AfterViewInit, OnDestroy {
     // Bursts use the app's accent, read at the moment of the roll.
     const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || GOLD[0];
     this.kind = kind;
-    this.pieces = Array.from({length: PHYSICS[kind].count}, () =>
-      kind === 'fall' ? this.fallingPiece(width, height) : this.burstPiece(kind, from, Math.min(width, height), accent));
+    this.pieces = Array.from({length: PHYSICS[kind].count}, () => this.burstPiece(kind, from, Math.min(width, height), accent));
     this.startTime = this.lastTime = performance.now();
     this.frameId = requestAnimationFrame(this.draw);
   }
@@ -109,22 +106,6 @@ export class ConfettiComponent implements AfterViewInit, OnDestroy {
       height: size * 0.55,
       color: colors[Math.floor(Math.random() * colors.length)],
       star: Math.random() < 0.18,
-    };
-  }
-
-  private fallingPiece(width: number, height: number): Piece {
-    const size = 10 + Math.random() * 10;
-    return {
-      x: Math.random() * width,
-      y: -Math.random() * height - size,
-      vx: (Math.random() - 0.5) * 60,
-      vy: 180 + Math.random() * 180,
-      rotation: Math.random() * 360,
-      rotationSpeed: 120 + Math.random() * 200,
-      width: size,
-      height: size * 0.4,
-      color: FALL_COLORS[Math.floor(Math.random() * FALL_COLORS.length)],
-      star: false,
     };
   }
 
@@ -163,23 +144,16 @@ export class ConfettiComponent implements AfterViewInit, OnDestroy {
       this.stop();
       return;
     }
-    const falling = this.kind === 'fall';
     const damping = Math.exp(-DRAG * dt);
 
     ctx.clearRect(0, 0, width, height);
     ctx.globalAlpha = 1 - fadeProgress;
     for (const p of this.pieces) {
-      if (!falling) {
-        p.vx *= damping;
-        p.vy = p.vy * damping + GRAVITY * dt;
-      }
+      p.vx *= damping;
+      p.vy = p.vy * damping + GRAVITY * dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.rotation += p.rotationSpeed * dt;
-      if (falling && p.y - p.height > height) {
-        p.y = -p.height;
-        p.x = Math.random() * width;
-      }
 
       ctx.save();
       ctx.translate(p.x, p.y);

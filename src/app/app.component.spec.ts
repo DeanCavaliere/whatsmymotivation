@@ -2,7 +2,8 @@ import {ComponentFixture, TestBed} from '@angular/core/testing';
 import {AppComponent} from './app.component';
 import {DiceService} from './dice.service';
 import {DieSides, RollMode} from './motivation';
-import {addDays, KeyValueStorage, localDateKey, STATS_KEY, STATS_STORAGE} from './stats.service';
+import {DayCondition} from './conditions';
+import {addDays, KeyValueStorage, localDateKey, STATS_KEY, STATS_STORAGE, StatsService} from './stats.service';
 
 class FakeDiceService {
   next: number[] = [12];
@@ -13,10 +14,18 @@ class FakeDiceService {
     return 'fallback';
   }
 
-  async roll(_mode: RollMode, sides: DieSides, color?: string): Promise<number[]> {
+  lastMode?: RollMode;
+  gravity = 1;
+
+  async roll(mode: RollMode, sides: DieSides, color?: string): Promise<number[]> {
+    this.lastMode = mode;
     this.lastSides = sides;
     this.lastColor = color;
     return this.next;
+  }
+
+  setGravity(gravity: number): void {
+    this.gravity = gravity;
   }
 }
 
@@ -33,7 +42,12 @@ describe('AppComponent', () => {
     await fixture.whenStable();
   }
 
+  /** Today's table condition; clear unless a test says otherwise, since it's rolled at random. */
+  let condition: DayCondition;
+
   beforeEach(async () => {
+    condition = 'clear';
+    vi.spyOn(StatsService.prototype, 'condition').mockImplementation(() => condition);
     // jsdom has no canvas; the confetti layer copes with a missing context.
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
     // Nor modal dialogs.
@@ -285,7 +299,7 @@ describe('AppComponent', () => {
       app.setStatsTab('badges');
       fixture.detectChanges();
       const el: HTMLElement = fixture.nativeElement;
-      expect(el.querySelector('.badge-count')!.textContent!.replace(/\s+/g, ' ')).toContain('3 of 15 badges earned');
+      expect(el.querySelector('.badge-count')!.textContent!.replace(/\s+/g, ' ')).toContain('3 of 18 badges earned');
       expect(el.querySelectorAll('.badge:not(.is-locked)').length).toBe(3);
       expect(el.querySelector('.badge.is-locked .badge-progress')!.textContent).toContain('1 of 6 dice');
     });
@@ -383,6 +397,66 @@ describe('AppComponent', () => {
       expect(el().querySelector('#calendar-title')!.textContent).toBe('September 2026');
       expect(el().querySelector('#day-2026-09-20 .calendar-mark')!.textContent).toBe('★');
       expect(app.canShiftCalendar(-1)).toBe(false);
+    });
+  });
+
+  describe('table conditions', () => {
+    const pill = () => fixture.nativeElement.querySelector('.condition-pill') as HTMLButtonElement | null;
+
+    it('shows nothing on a clear day', async () => {
+      await setup();
+      expect(pill()).toBeNull();
+    });
+
+    it('names the condition on the felt and explains it', async () => {
+      condition = 'foggy';
+      await setup();
+      expect(pill()!.textContent).toContain('Foggy today');
+      pill()!.click();
+      fixture.detectChanges();
+      const dialog = fixture.nativeElement.querySelector('dialog[aria-labelledby="condition-title"]') as HTMLDialogElement;
+      expect(dialog.open).toBe(true);
+      expect(dialog.textContent).toContain('wipe the fog away');
+    });
+
+    it('rolls the day\'s roll with advantage when Blessed, then frees the mode', async () => {
+      condition = 'blessed';
+      await setup();
+      const advantage = fixture.nativeElement.querySelector('.segmented button[aria-label="Advantage"]') as HTMLButtonElement;
+      expect(advantage.getAttribute('aria-pressed')).toBe('true');
+      expect(advantage.disabled).toBe(true);
+      expect(advantage.querySelector('.mode-lock')).not.toBeNull();
+      dice.next = [5, 14];
+      await app.roll();
+      expect(dice.lastMode).toBe('advantage');
+      expect(app.today?.value).toBe(14);
+      dice.next = [9];
+      await app.roll();
+      expect(dice.lastMode).toBe('normal');
+    });
+
+    it('rolls with disadvantage when Hexed', async () => {
+      condition = 'hexed';
+      await setup();
+      dice.next = [5, 14];
+      await app.roll();
+      expect(dice.lastMode).toBe('disadvantage');
+      expect(app.today?.value).toBe(5);
+    });
+
+    it('earns a ✦ for a roll of 15 or more on an Inspired day', async () => {
+      condition = 'inspired';
+      await setup();
+      dice.next = [15];
+      await app.roll();
+      expect(app.result!.inspiration).toEqual(expect.objectContaining({reasons: ['inspired'], kept: 1}));
+      expect(app.stats.inspiration.held).toBe(2);
+    });
+
+    it('lowers the dice\'s gravity on a low-gravity day', async () => {
+      condition = 'low-gravity';
+      await setup();
+      expect(dice.gravity).toBe(0.35);
     });
   });
 
