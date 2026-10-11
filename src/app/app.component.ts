@@ -4,7 +4,17 @@ import {ConfettiComponent} from './components/confetti/confetti.component';
 import {ConfettiService} from './components/confetti/confetti.service';
 import {DiceService} from './dice.service';
 import {keptValue, RollMode, Tier, tierFor, Verdict, verdictFor} from './motivation';
-import {Stats, StatsService, STATS_KEY, StatsSummary, summarize, TodayRoll, todayRoll} from './stats.service';
+import {
+  activeStreak,
+  Stats,
+  STATS_KEY,
+  StatsService,
+  StatsSummary,
+  streakAtRisk,
+  summarize,
+  TodayRoll,
+  todayRoll,
+} from './stats.service';
 
 interface RollResult {
   value: number;
@@ -13,6 +23,9 @@ interface RollResult {
   mode: RollMode;
   verdict: Verdict;
   isToday: boolean;
+  /** Streak length after this roll, when it was today's roll. */
+  streak: number;
+  newBest: boolean;
 }
 
 interface ChartBar {
@@ -51,6 +64,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   stats: Stats;
   summary: StatsSummary;
   today: TodayRoll | null = null;
+  streak = 0;
+  streakAtRisk = false;
   sessionRolls = 0;
   bars: ChartBar[] = [];
   hoveredBar: ChartBar | null = null;
@@ -73,6 +88,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         mode: today.mode,
         verdict: verdictFor(today.value),
         isToday: true,
+        streak: this.streak,
+        newBest: false,
       };
     }
   }
@@ -110,6 +127,19 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  /** The app may sit open (or installed) across midnight; refresh day-based state on return. */
+  @HostListener('document:visibilitychange')
+  onVisibilityChange(): void {
+    if (document.visibilityState !== 'visible') {
+      return;
+    }
+    this.stats = this.statsService.load();
+    this.refreshDerived();
+    if (this.result?.isToday && !this.today && !this.rolling) {
+      this.result = null;
+    }
+  }
+
   async roll(): Promise<void> {
     if (!this.ready || this.rolling) {
       return;
@@ -121,6 +151,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       const values = await this.dice.roll(mode);
       const value = keptValue(values, mode);
       const hadToday = !!todayRoll(this.stats);
+      const previousBest = this.stats.streak.best;
       this.stats = this.statsService.record(value, mode);
       this.sessionRolls++;
       this.refreshDerived();
@@ -132,6 +163,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         mode,
         verdict,
         isToday: !hadToday,
+        streak: this.streak,
+        newBest: !hadToday && this.streak > 1 && this.streak > previousBest,
       };
       if (verdict.celebration) {
         this.confetti.trigger(verdict.celebration);
@@ -221,6 +254,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private refreshDerived(): void {
     this.summary = summarize(this.stats);
     this.today = todayRoll(this.stats);
+    this.streak = activeStreak(this.stats);
+    this.streakAtRisk = streakAtRisk(this.stats);
 
     const max = Math.max(1, ...this.stats.faceCounts);
     const {height, barWidth, gap} = CHART;

@@ -37,6 +37,14 @@ export interface TodayRoll {
   mode: RollMode;
 }
 
+export interface Streak {
+  /** Consecutive local days with at least one roll, ending on `lastDate`. */
+  current: number;
+  best: number;
+  /** Local calendar date of the most recent roll, YYYY-MM-DD. */
+  lastDate: string | null;
+}
+
 export interface Stats {
   version: 1;
   /** Includes rolls made before per-face tracking existed, so it can exceed sum(faceCounts). */
@@ -46,6 +54,7 @@ export interface Stats {
   /** Newest first. */
   history: RollRecord[];
   today: TodayRoll | null;
+  streak: Streak;
 }
 
 export interface StatsSummary {
@@ -56,12 +65,61 @@ export interface StatsSummary {
 }
 
 export function emptyStats(): Stats {
-  return {version: 1, lifetimeRolls: 0, faceCounts: new Array(20).fill(0), history: [], today: null};
+  return {
+    version: 1,
+    lifetimeRolls: 0,
+    faceCounts: new Array(20).fill(0),
+    history: [],
+    today: null,
+    streak: {current: 0, best: 0, lastDate: null},
+  };
 }
 
 export function localDateKey(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/** Shifts a YYYY-MM-DD key by whole local days (DST-safe). */
+export function addDays(dateKey: string, days: number): string {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  return localDateKey(new Date(y, m - 1, d + days));
+}
+
+/**
+ * The streak as of `now`: still alive if the last roll was today or yesterday
+ * (yesterday's streak can be kept by rolling today), otherwise broken.
+ */
+export function activeStreak(stats: Stats, now: Date = new Date()): number {
+  const {current, lastDate} = stats.streak;
+  const today = localDateKey(now);
+  return lastDate === today || lastDate === addDays(today, -1) ? current : 0;
+}
+
+/** True when there is a streak that a roll today would extend, and no roll yet today. */
+export function streakAtRisk(stats: Stats, now: Date = new Date()): boolean {
+  return stats.streak.lastDate === addDays(localDateKey(now), -1) && stats.streak.current > 0;
+}
+
+/** Rebuilds a streak from roll history, for data saved before streaks were tracked. */
+export function streakFromHistory(history: RollRecord[]): Streak {
+  const days = [...new Set(history.map(h => localDateKey(new Date(h.at))))].sort().reverse();
+  if (!days.length) {
+    return {current: 0, best: 0, lastDate: null};
+  }
+  let run = 1;
+  let best = 1;
+  let current = 0;
+  for (let i = 1; i <= days.length; i++) {
+    if (i < days.length && days[i] === addDays(days[i - 1], -1)) {
+      run++;
+      continue;
+    }
+    current ||= run;
+    best = Math.max(best, run);
+    run = 1;
+  }
+  return {current, best, lastDate: days[0]};
 }
 
 export function summarize(stats: Stats): StatsSummary {
@@ -81,6 +139,7 @@ export function todayRoll(stats: Stats, now: Date = new Date()): TodayRoll | nul
 
 const isCount = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0;
 const isFace = (n: unknown): n is number => Number.isInteger(n) && (n as number) >= 1 && (n as number) <= 20;
+const isDateKey = (s: unknown): s is string => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 const isMode = (m: unknown): m is RollMode => m === 'normal' || m === 'advantage' || m === 'disadvantage';
 
 /** Coerces anything read from storage into a valid Stats, dropping whatever is malformed. */
@@ -106,6 +165,13 @@ export function sanitize(raw: unknown): Stats {
   const t = r['today'] as Partial<TodayRoll> | null | undefined;
   if (t && typeof t.date === 'string' && isFace(t.value) && isMode(t.mode)) {
     stats.today = {date: t.date, value: t.value, mode: t.mode};
+  }
+  const k = r['streak'] as Partial<Streak> | null | undefined;
+  if (k && isCount(k.current) && isCount(k.best) && (k.lastDate === null || isDateKey(k.lastDate))) {
+    const current = Math.floor(k.current);
+    stats.streak = {current, best: Math.max(current, Math.floor(k.best)), lastDate: k.lastDate};
+  } else {
+    stats.streak = streakFromHistory(stats.history);
   }
   return stats;
 }
@@ -138,7 +204,7 @@ export class StatsService {
 
   /**
    * Re-reads storage before writing so rolls made in another tab are not overwritten.
-   * The first roll of each local day becomes "today's roll".
+   * The first roll of each local day becomes "today's roll" and extends the streak.
    */
   record(value: number, mode: RollMode, now: Date = new Date()): Stats {
     if (!isFace(value)) {
@@ -148,8 +214,15 @@ export class StatsService {
     stats.lifetimeRolls++;
     stats.faceCounts[value - 1]++;
     stats.history = [{value, mode, at: now.getTime()}, ...stats.history].slice(0, HISTORY_LIMIT);
+    const date = localDateKey(now);
     if (!todayRoll(stats, now)) {
-      stats.today = {date: localDateKey(now), value, mode};
+      stats.today = {date, value, mode};
+    }
+    const {streak} = stats;
+    if (streak.lastDate !== date) {
+      streak.current = streak.lastDate === addDays(date, -1) ? streak.current + 1 : 1;
+      streak.best = Math.max(streak.best, streak.current);
+      streak.lastDate = date;
     }
     this.save(stats);
     return stats;

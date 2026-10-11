@@ -7,9 +7,9 @@
         <dt>Today</dt>
         <dd>{{ today ? today.value : '—' }}</dd>
       </div>
-      <div>
-        <dt>Session</dt>
-        <dd>{{ sessionRolls }}</dd>
+      <div [title]="streakAtRisk ? 'Roll today to keep your streak going' : 'Days in a row with a roll'">
+        <dt>Streak</dt>
+        <dd [class.is-at-risk]="streakAtRisk">{{ streak }}</dd>
       </div>
       <div class="hud-optional">
         <dt>Lifetime</dt>
@@ -51,10 +51,15 @@
           <div class="result-dropped">dropped {{ r.dropped }}</div>
         }
         <p class="result-message">{{ r.verdict.message }}</p>
+        @if (r.isToday && r.streak > 1) {
+          <p class="result-streak">{{ r.streak }}-day streak{{ r.newBest ? ' · new best!' : '' }}</p>
+        }
         <button type="button" class="btn btn-ghost btn-small" (click)="share()">Share</button>
       }
       @if (!ready) {
         <p class="result-status">Setting up the table…</p>
+      } @else if (!result && !rolling && streakAtRisk) {
+        <p class="result-status">Roll today to keep your {{ streak }}-day streak</p>
       }
     </section>
 
@@ -73,6 +78,14 @@
       <div>
         <dt>Today's roll</dt>
         <dd [attr.data-tier]="today ? tierOf(today.value) : null">{{ today ? today.value : '—' }}</dd>
+      </div>
+      <div>
+        <dt>Day streak</dt>
+        <dd>{{ streak }}</dd>
+      </div>
+      <div>
+        <dt>Best streak</dt>
+        <dd>{{ stats.streak.best }}</dd>
       </div>
       <div>
         <dt>Lifetime rolls</dt>

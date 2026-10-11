@@ -1,4 +1,6 @@
 import {
+  activeStreak,
+  addDays,
   HISTORY_LIMIT,
   KeyValueStorage,
   LEGACY_LIFETIME_KEY,
@@ -6,6 +8,8 @@ import {
   sanitize,
   STATS_KEY,
   StatsService,
+  streakAtRisk,
+  streakFromHistory,
   summarize,
   todayRoll,
 } from './stats.service';
@@ -131,5 +135,55 @@ describe('StatsService', () => {
     const stats = sanitize({faceCounts: [2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]});
     expect(summarize(stats)).toEqual({trackedRolls: 4, nat20s: 1, nat1s: 2, average: (1 + 1 + 10 + 20) / 4});
     expect(summarize(sanitize(null)).average).toBeNull();
+  });
+
+  describe('streaks', () => {
+    const day = (d: number, hour = 9) => new Date(2026, 9, d, hour, 0);
+
+    it('counts consecutive days, not rolls', () => {
+      service.record(10, 'normal', day(10));
+      service.record(11, 'normal', day(10, 22));
+      service.record(12, 'normal', day(11));
+      const stats = service.record(13, 'normal', day(12));
+      expect(stats.streak).toEqual({current: 3, best: 3, lastDate: '2026-10-12'});
+      expect(activeStreak(stats, day(12))).toBe(3);
+    });
+
+    it('stays alive through the next day, then breaks', () => {
+      const stats = service.record(10, 'normal', day(10));
+      expect(activeStreak(stats, day(11, 23))).toBe(1);
+      expect(streakAtRisk(stats, day(11))).toBe(true);
+      expect(streakAtRisk(stats, day(10))).toBe(false);
+      expect(activeStreak(stats, day(12))).toBe(0);
+    });
+
+    it('restarts after a missed day but remembers the best', () => {
+      service.record(10, 'normal', day(10));
+      service.record(10, 'normal', day(11));
+      const stats = service.record(10, 'normal', day(13));
+      expect(stats.streak).toEqual({current: 1, best: 2, lastDate: '2026-10-13'});
+    });
+
+    it('crosses month boundaries and DST changes', () => {
+      expect(addDays('2026-10-31', 1)).toBe('2026-11-01');
+      expect(addDays('2026-03-01', -1)).toBe('2026-02-28');
+      expect(addDays('2026-11-01', 1)).toBe('2026-11-02');
+      expect(addDays('2026-03-08', 1)).toBe('2026-03-09');
+    });
+
+    it('rebuilds streaks from history saved before they were tracked', () => {
+      const at = (d: number) => ({value: 10, mode: 'normal' as const, at: day(d).getTime()});
+      expect(streakFromHistory([at(12), at(12), at(11), at(8), at(7), at(6), at(5)]))
+        .toEqual({current: 2, best: 4, lastDate: '2026-10-12'});
+      expect(streakFromHistory([])).toEqual({current: 0, best: 0, lastDate: null});
+
+      storage.setItem(STATS_KEY, JSON.stringify({lifetimeRolls: 2, history: [at(11), at(10)]}));
+      expect(service.record(4, 'normal', day(12)).streak.current).toBe(3);
+    });
+
+    it('ignores a malformed stored streak', () => {
+      storage.setItem(STATS_KEY, JSON.stringify({streak: {current: 'many', best: 2, lastDate: 'yesterday'}}));
+      expect(service.load().streak).toEqual({current: 0, best: 0, lastDate: null});
+    });
   });
 });
