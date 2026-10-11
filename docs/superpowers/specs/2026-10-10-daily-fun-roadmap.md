@@ -41,16 +41,16 @@ Chunk 2 comes early because Halloween (October) is three weeks away.
 
 - Remove roll-on-table-click (`onTableClick`) and the global Space/Enter shortcut (`onKeydown`).
 - The header Roll button is the only way to roll. A focused button still responds to Space and Enter natively.
-- The chalk hint on the felt changes to match; the new wording is mocked.
+- The chalk hint on the felt now reads: Hit “Roll for Motivation” Above.
 
-**Share card.** The text share gains a 7-day strip: one emoji square per day by tier (⬛ for no roll), plus the streak. Example: `What's my motivation? Oct 10 · 🎲 17 (adv) 🟨🟩⬛🟩🟥🟩🟩 🔥4 whatsmymotivation.today`.
+**Share card.** The text share gains a 7-day strip, one emoji per day by tier, plus the streak (from 2 days). Emoji: 🌟 natural top face, 🟦 15–19, 🟩 12–14, 🟨 9–11, 🟧 6–8, 🟥 2–5, 💀 natural 1, ⬛ no roll. Example: `What's my motivation? Oct 10 · 🎲 17 (adv)` / `🟨🟩⬛🟩💀🌟🟦 🔥2` / `whatsmymotivation.today`. (Built; the user may revisit the 7-day strip later.)
 
 - It uses `navigator.share` on phones and the clipboard plus a toast on desktop.
 - The emoji-per-tier mapping is a pure, tested function.
 
-**Natural 20 (a crit success, on any die).** A bigger confetti burst in the accent color and gold, starting from the die's position, plus a gold glow pulse on the number. Very-high rolls keep today's smaller confetti.
+**Natural 20 (a crit success, on any die).** A confetti burst in the accent color and gold from the result number (dice-box renders in a worker, so the die's position isn't readable), plus a gold flare that settles into a halo. Rolls of 15–19 get a smaller burst. Nothing falls from the top of the screen any more; that falling mode is kept in the confetti layer for chunk 7's rain and snow.
 
-**Natural 1.** Cracks spread across the felt from the die, the felt briefly dims and desaturates, and the existing tears effect plays.
+**Natural 1.** The number thuds onto the felt, the table jolts, the felt briefly drains of color, and cracks spread from under the number. No tears or confetti. Rolls of 2–5 get no effect.
 
 - The crack stays on the table for the rest of the day while that 1 is the day's roll.
 - Practice rolls ("Roll again") don't clear it. Only replacing the day's roll does: a nudge now, a reroll after chunk 6.
