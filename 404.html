@@ -1,13 +1,40 @@
 <!doctype html>
-<html lang="en" data-critters-container>
+<html lang="en" data-beasties-container>
 <head>
   <meta charset="utf-8">
   <title>What's My Motivation Today?</title>
   <base href="/">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" type="image/x-icon" href="favicon.ico">
-<style>html,body{font-family:Avenir,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow:hidden;width:100%;height:100%;margin:0;padding:0;position:relative}</style><link rel="stylesheet" href="styles.18a1e70b18bf2080.css" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="styles.18a1e70b18bf2080.css"></noscript></head>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Roll a d20 to find out how motivated you'll be today. Natural 20? Carpe diem. Natural 1? Back to bed.">
+  <meta name="theme-color" content="#161719">
+  <meta property="og:title" content="What's My Motivation Today?">
+  <meta property="og:description" content="Roll a d20 to find out how motivated you'll be today.">
+  <meta property="og:url" content="https://whatsmymotivation.today">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="favicon.ico" sizes="48x48">
+  <link rel="icon" href="assets/icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="apple-mobile-web-app-title" content="Motivation">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <!-- The table artwork is the first thing on screen; fetch it alongside the JS. -->
+  <link rel="preload" as="image" href="assets/img/felt.webp" type="image/webp" fetchpriority="high">
+  <link rel="preload" as="image" href="assets/img/frame.webp" type="image/webp" fetchpriority="high">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- crossorigin makes the response cacheable by the service worker for offline use. -->
+  <style>@font-face{font-family:'Jost';font-style:normal;font-weight:500;font-display:swap;src:url(https://fonts.gstatic.com/s/jost/v20/92zatBhPNqw73oDd4iYl.woff2) format('woff2');unicode-range:U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;}@font-face{font-family:'Jost';font-style:normal;font-weight:500;font-display:swap;src:url(https://fonts.gstatic.com/s/jost/v20/92zatBhPNqw73ord4iYl.woff2) format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;}@font-face{font-family:'Jost';font-style:normal;font-weight:500;font-display:swap;src:url(https://fonts.gstatic.com/s/jost/v20/92zatBhPNqw73oTd4g.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;}@font-face{font-family:'Jost';font-style:normal;font-weight:600;font-display:swap;src:url(https://fonts.gstatic.com/s/jost/v20/92zatBhPNqw73oDd4iYl.woff2) format('woff2');unicode-range:U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;}@font-face{font-family:'Jost';font-style:normal;font-weight:600;font-display:swap;src:url(https://fonts.gstatic.com/s/jost/v20/92zatBhPNqw73ord4iYl.woff2) format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;}@font-face{font-family:'Jost';font-style:normal;font-weight:600;font-display:swap;src:url(https://fonts.gstatic.com/s/jost/v20/92zatBhPNqw73oTd4g.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;}@font-face{font-family:'Jost';font-style:normal;font-weight:700;font-display:swap;src:url(https://fonts.gstatic.com/s/jost/v20/92zatBhPNqw73oDd4iYl.woff2) format('woff2');unicode-range:U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;}@font-face{font-family:'Jost';font-style:normal;font-weight:700;font-display:swap;src:url(https://fonts.gstatic.com/s/jost/v20/92zatBhPNqw73ord4iYl.woff2) format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;}@font-face{font-family:'Jost';font-style:normal;font-weight:700;font-display:swap;src:url(https://fonts.gstatic.com/s/jost/v20/92zatBhPNqw73oTd4g.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;}</style>
+
+  <style>
+    /* Paint the table colors before the app bundle loads. */
+    html, body { margin: 0; height: 100%; background: #161719; }
+  </style>
+<style>:root{--ink:#dfe1e5;--ink-muted:#b8bcc2;--surface:#161719;--surface-raised:#222326;--line:rgba(255, 255, 255, .13);--hover:rgba(255, 255, 255, .07);--felt:#10422f;--chalk:rgba(150, 230, 210, .6);--accent:#e0905a;--accent-fill:color-mix(in srgb, var(--accent) 15%, transparent);--accent-hover:color-mix(in srgb, var(--accent) 85%, white);--accent-ink:#141518;--focus:color-mix(in srgb, var(--accent) 55%, white);--danger:#ff9b92;--tier-crit-fail:#ff6b6b;--tier-very-low:#ff9a76;--tier-low:#f6c58f;--tier-mid:#efe6d2;--tier-high:#a8eadc;--tier-very-high:#7ff0b0;--tier-crit-success:#ffd54a;--font:"Jost", "Futura", "Century Gothic", "Avenir", "Helvetica Neue", Arial, sans-serif;color-scheme:dark}*,*:before,*:after{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--surface);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;-webkit-tap-highlight-color:transparent}@supports (height: 100dvh){html,body{height:100dvh}}app-root{display:block;height:100%}@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}</style><link rel="stylesheet" href="styles-6OLWLR6N.css" media="print" data-beasties-media="all"><noscript><link rel="stylesheet" href="styles-6OLWLR6N.css"></noscript></head>
 <body>
   <app-root></app-root>
-<script src="runtime.307d1a59e8848808.js" type="module"></script><script src="polyfills.0b257a353f3134b1.js" type="module"></script><script src="main.59584fbae51233c1.js" type="module"></script></body>
+  <noscript>What's My Motivation Today needs JavaScript to roll the dice.</noscript>
+<script src="polyfills-5CFQRCPP.js" type="module"></script><script src="main-ZOBU4SM6.js" type="module"></script><script>document.querySelectorAll('link[data-beasties-media]').forEach(function(l){l.media=l.getAttribute('data-beasties-media');l.removeAttribute('data-beasties-media')})</script></body>
 </html>

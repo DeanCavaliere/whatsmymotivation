@@ -1,0 +1,130 @@
+{
+  "configVersion": 1,
+  "timestamp": 1791754719197,
+  "index": "/index.html",
+  "assetGroups": [
+    {
+      "name": "app",
+      "installMode": "prefetch",
+      "updateMode": "prefetch",
+      "cacheQueryOptions": {
+        "ignoreVary": true
+      },
+      "urls": [
+        "/assets/dice-box/ammo/ammo.wasm.wasm",
+        "/assets/dice-box/themes/default/default.json",
+        "/assets/dice-box/themes/default/diffuse-dark.png",
+        "/assets/dice-box/themes/default/diffuse-light.png",
+        "/assets/dice-box/themes/default/normal.png",
+        "/assets/dice-box/themes/default/specular.jpg",
+        "/assets/dice-box/themes/default/theme.config.json",
+        "/assets/img/felt.webp",
+        "/assets/img/frame.webp",
+        "/assets/sounds/LICENSE.txt",
+        "/assets/sounds/dice-throw-1.wav",
+        "/assets/sounds/dice-throw-2.wav",
+        "/assets/sounds/dice-throw-3.wav",
+        "/assets/sounds/die-throw-1.wav",
+        "/assets/sounds/die-throw-2.wav",
+        "/assets/sounds/die-throw-3.wav",
+        "/assets/sounds/die-throw-4.wav",
+        "/chunk-1k5_K8HH.js",
+        "/chunk-ChN2NdPS.js",
+        "/chunk-D0YZq5xc.js",
+        "/chunk-DLBVifpf.js",
+        "/chunk-Q-S1ZVmp.js",
+        "/favicon.ico",
+        "/index.html",
+        "/main-ZOBU4SM6.js",
+        "/manifest.webmanifest",
+        "/polyfills-5CFQRCPP.js",
+        "/styles-6OLWLR6N.css"
+      ],
+      "patterns": []
+    },
+    {
+      "name": "icons",
+      "installMode": "lazy",
+      "updateMode": "prefetch",
+      "cacheQueryOptions": {
+        "ignoreVary": true
+      },
+      "urls": [
+        "/assets/icons/apple-touch-icon.png",
+        "/assets/icons/icon-192.png",
+        "/assets/icons/icon-512.png",
+        "/assets/icons/icon-maskable-512.png",
+        "/assets/icons/icon.svg"
+      ],
+      "patterns": []
+    },
+    {
+      "name": "fonts",
+      "installMode": "lazy",
+      "updateMode": "lazy",
+      "cacheQueryOptions": {
+        "ignoreVary": true
+      },
+      "urls": [],
+      "patterns": [
+        "https:\\/\\/fonts\\.googleapis\\.com\\/.*",
+        "https:\\/\\/fonts\\.gstatic\\.com\\/.*"
+      ]
+    }
+  ],
+  "dataGroups": [],
+  "hashTable": {
+    "/assets/dice-box/ammo/ammo.wasm.wasm": "053f3f339902cb5b2988e85b165ff63a494534ec",
+    "/assets/dice-box/themes/default/default.json": "c98cc6484c84cc4872f381a500d5fcff936bf439",
+    "/assets/dice-box/themes/default/diffuse-dark.png": "49ac69ab203c1e0d7c7d6511a0dbf13beb1a41a1",
+    "/assets/dice-box/themes/default/diffuse-light.png": "3a7b34ab85f828511052b16488e22b5d0e3d98ca",
+    "/assets/dice-box/themes/default/normal.png": "528179d438d7568786488d0a207cab00d8aea8a2",
+    "/assets/dice-box/themes/default/specular.jpg": "70e3d5aef7212c460f271f2f0bdc745de6bca346",
+    "/assets/dice-box/themes/default/theme.config.json": "e7b3d444fe91d41c41183217b5bc1cb5a8d11d56",
+    "/assets/icons/apple-touch-icon.png": "5854059f782176dbe9dd1e41b18ce5cb32af0ca7",
+    "/assets/icons/icon-192.png": "f2c6254a42a0a67a9a7a1e02e5e2419e48e517cb",
+    "/assets/icons/icon-512.png": "5ff479bb5404a2aadcb27eb91c2914df3e0df75c",
+    "/assets/icons/icon-maskable-512.png": "d51f8a312af7792da06ad37a9da796eca00a9733",
+    "/assets/icons/icon.svg": "52b33d16698acdd9abc26e03cf622b430ff440ce",
+    "/assets/img/felt.webp": "5615ea2218d4c2d1afd7fb04b0fdc27e2732682a",
+    "/assets/img/frame.webp": "07410af478048d83922fa01b14106c5901e34887",
+    "/assets/sounds/LICENSE.txt": "ba20a6c7940b0a1686b42c5eb40fd44080374c47",
+    "/assets/sounds/dice-throw-1.wav": "026a0a2d13193c4af506e746ad706a7c5d1ab95d",
+    "/assets/sounds/dice-throw-2.wav": "b0955d003f06f7120ec1b9b1e80a55f356906dc9",
+    "/assets/sounds/dice-throw-3.wav": "37f85193c055f411480c1076e3aeda5c90116a59",
+    "/assets/sounds/die-throw-1.wav": "eb273186fcf1a9709914f43107a77781980d4a16",
+    "/assets/sounds/die-throw-2.wav": "db3c0e938a022027a9d7c0341874a051a428f2a4",
+    "/assets/sounds/die-throw-3.wav": "3bcb8b27dd2662775aa309ef7f0a96aa76684604",
+    "/assets/sounds/die-throw-4.wav": "0d839399683ec426a1603c3878bd7bd16440dd85",
+    "/chunk-1k5_K8HH.js": "f10fd28907eccc7aae70ece6b1c61bbe796d9305",
+    "/chunk-ChN2NdPS.js": "2bbc618ff15050ac3c7f282e695f9bba1de592e3",
+    "/chunk-D0YZq5xc.js": "15357cd7904a5af93d5eb52d7aa15de5e29ec1f4",
+    "/chunk-DLBVifpf.js": "020ae11ccf2d97972f2ec42fdc895eaac2667848",
+    "/chunk-Q-S1ZVmp.js": "2cea685ccac8ee33bb4918be6e485ef2c48721ec",
+    "/favicon.ico": "cc38a82f9cf6842fe1feaf8cdd987bb5366b19b7",
+    "/index.html": "c2fa435352472f1c34654d8956f65d1c5a4fbd23",
+    "/main-ZOBU4SM6.js": "30e658e7e02453b2bfb7e418771f9db6cbb47f75",
+    "/manifest.webmanifest": "b40ab014629108485ac5711b5cda309b2b4a32b2",
+    "/polyfills-5CFQRCPP.js": "f2241e9a25858f895ce299d15f6f22e849e2fd72",
+    "/styles-6OLWLR6N.css": "6f72bc43c04c0a6960e005a485ef5b2776050f54"
+  },
+  "navigationUrls": [
+    {
+      "positive": true,
+      "regex": "^\\/.*$"
+    },
+    {
+      "positive": false,
+      "regex": "^\\/(?:.+\\/)?[^/]*\\.[^/]*$"
+    },
+    {
+      "positive": false,
+      "regex": "^\\/(?:.+\\/)?[^/]*__[^/]*$"
+    },
+    {
+      "positive": false,
+      "regex": "^\\/(?:.+\\/)?[^/]*__[^/]*\\/.*$"
+    }
+  ],
+  "navigationRequestStrategy": "performance"
+}
