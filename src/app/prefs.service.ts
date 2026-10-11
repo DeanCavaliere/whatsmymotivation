@@ -80,10 +80,13 @@ export interface Prefs {
   seasonal: boolean;
   /** A season the player turned off by picking their own table or dice (see `seasonKey`). */
   seasonOff: string | null;
+  sound: boolean;
+  /** Buzz the phone when the dice land (where the browser allows it). */
+  vibration: boolean;
 }
 
 export const DEFAULT_PREFS: Prefs = {
-  table: 'classic', accent: 'copper', dice: 'gold', sides: 20, nudge: true, seasonal: true, seasonOff: null,
+  table: 'classic', accent: 'copper', dice: 'gold', sides: 20, nudge: true, seasonal: true, seasonOff: null, sound: true, vibration: true,
 };
 
 export function tableTheme(id: string): TableTheme {
@@ -124,6 +127,8 @@ export class PrefsService {
         nudge: typeof raw?.['nudge'] === 'boolean' ? raw['nudge'] as boolean : DEFAULT_PREFS.nudge,
         seasonal: typeof raw?.['seasonal'] === 'boolean' ? raw['seasonal'] as boolean : DEFAULT_PREFS.seasonal,
         seasonOff: typeof raw?.['seasonOff'] === 'string' ? raw['seasonOff'] as string : null,
+        sound: typeof raw?.['sound'] === 'boolean' ? raw['sound'] as boolean : DEFAULT_PREFS.sound,
+        vibration: typeof raw?.['vibration'] === 'boolean' ? raw['vibration'] as boolean : DEFAULT_PREFS.vibration,
       };
     } catch {
       return {...DEFAULT_PREFS};

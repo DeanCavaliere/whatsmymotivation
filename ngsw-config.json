@@ -13,7 +13,8 @@
           "/*.css",
           "/*.js",
           "/assets/img/**",
-          "/assets/dice-box/**"
+          "/assets/dice-box/**",
+          "/assets/sounds/**"
         ]
       }
     },

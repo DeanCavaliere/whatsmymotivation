@@ -31,6 +31,17 @@
     </div>
 
     <div class="tools">
+      <button type="button" class="btn btn-ghost btn-icon" (click)="toggleSound()" [attr.aria-pressed]="!prefs.sound"
+        aria-label="Mute sounds" [title]="prefs.sound ? 'Mute sounds' : 'Turn sounds back on'">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 9h4l5-4v14l-5-4H4z"/>
+          @if (prefs.sound) {
+            <path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/>
+          } @else {
+            <path d="M16.5 9.5l5 5M21.5 9.5l-5 5"/>
+          }
+        </svg>
+      </button>
       <button type="button" class="btn btn-ghost btn-icon" (click)="openStats()" aria-haspopup="dialog"
         aria-label="Stats" title="Stats">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M12 20V4M19 20v-6"/></svg>
@@ -514,6 +525,30 @@
           aria-labelledby="nudge-label" aria-describedby="nudge-description"
           (change)="setNudge(nudgeSwitch.checked)">
       </label>
+
+      <label class="switch-row" for="sound-switch">
+        <span class="switch-text">
+          <strong id="sound-label">Sound</strong>
+          <small id="sound-description">Dice landing, and a fanfare or a sad trombone on a crit. The mute button up top does the same.</small>
+        </span>
+        <span class="switch-state" aria-hidden="true">{{ prefs.sound ? 'On' : 'Off' }}</span>
+        <input #soundSwitch id="sound-switch" class="switch" type="checkbox" role="switch" [checked]="prefs.sound"
+          aria-labelledby="sound-label" aria-describedby="sound-description"
+          (change)="setSound(soundSwitch.checked)">
+      </label>
+
+      @if (sound.canVibrate) {
+        <label class="switch-row" for="vibration-switch">
+          <span class="switch-text">
+            <strong id="vibration-label">Vibration</strong>
+            <small id="vibration-description">A buzz when the dice land, and a pattern on a crit. Off when your device asks for reduced motion.</small>
+          </span>
+          <span class="switch-state" aria-hidden="true">{{ prefs.vibration ? 'On' : 'Off' }}</span>
+          <input #vibrationSwitch id="vibration-switch" class="switch" type="checkbox" role="switch" [checked]="prefs.vibration"
+            aria-labelledby="vibration-label" aria-describedby="vibration-description"
+            (change)="setVibration(vibrationSwitch.checked)">
+        </label>
+      }
 
       <label class="switch-row" for="seasonal-switch">
         <span class="switch-text">

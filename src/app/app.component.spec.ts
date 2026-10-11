@@ -211,6 +211,25 @@ describe('AppComponent', () => {
       expect(app.crack).toBeNull();
     });
 
+    it('plays the dice and crit sounds, and stops when muted', async () => {
+      const thrown = vi.spyOn(app.sound, 'diceThrown');
+      const landed = vi.spyOn(app.sound, 'landed');
+      dice.next = [4, 20];
+      app.setMode('advantage');
+      await app.roll();
+      expect(thrown).toHaveBeenCalledWith(2);
+      expect(landed).toHaveBeenCalledWith('big-burst');
+
+      fixture.detectChanges();
+      const mute = fixture.nativeElement.querySelector('button[aria-label="Mute sounds"]') as HTMLButtonElement;
+      expect(mute.getAttribute('aria-pressed')).toBe('false');
+      mute.click();
+      fixture.detectChanges();
+      expect(mute.getAttribute('aria-pressed')).toBe('true');
+      expect(app.sound.sound).toBe(false);
+      expect(JSON.parse(store.get('wmm.prefs.v1')!).sound).toBe(false);
+    });
+
     it('hides the nudge when it is switched off', async () => {
       (fixture.nativeElement.querySelector('.switch') as HTMLInputElement).click();
       await app.roll();

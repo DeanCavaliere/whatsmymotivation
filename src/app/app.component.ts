@@ -8,6 +8,7 @@ import {CrackPath, crackPaths} from './crack';
 import {activeSeason, Season, seasonKey, SEASONS} from './seasons';
 import {shareText} from './share';
 import {DiceService} from './dice.service';
+import {SoundService} from './sound.service';
 import {Celebration, DieSides, dieOdds, keptValue, RollMode, Tier, tierFor, Verdict, verdictFor} from './motivation';
 import {
   accentColor,
@@ -179,6 +180,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
               private statsService: StatsService,
               private confetti: ConfettiService,
               private prefsService: PrefsService,
+              readonly sound: SoundService,
               private zone: NgZone,
               @Optional() swUpdate: SwUpdate | null) {
     // A cached version whose files are gone from the server can't recover on its own.
@@ -291,6 +293,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.announcement = '';
     const mode = this.mode;
     const sides = this.prefs.sides;
+    // Still inside the click, so the browser lets audio start.
+    this.sound.diceThrown(mode === 'normal' ? 1 : 2);
     try {
       const values = await this.dice.roll(mode, sides, this.diceTint);
       const value = keptValue(values, mode);
@@ -527,6 +531,23 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.prefsService.save(this.prefs);
   }
 
+  /** The header's mute button. */
+  toggleSound(): void {
+    this.setSound(!this.prefs.sound);
+  }
+
+  setSound(sound: boolean): void {
+    this.prefs = {...this.prefs, sound};
+    this.prefsService.save(this.prefs);
+    this.applyTable();
+  }
+
+  setVibration(vibration: boolean): void {
+    this.prefs = {...this.prefs, vibration};
+    this.prefsService.save(this.prefs);
+    this.applyTable();
+  }
+
   setNudge(nudge: boolean): void {
     this.prefs = {...this.prefs, nudge};
     this.prefsService.save(this.prefs);
@@ -605,6 +626,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   /** Runs after the result renders, so effects can start from the number. */
   private celebrate(celebration: Celebration): void {
+    this.sound.landed(celebration);
     if (celebration === 'crack' && !this.reducedMotion?.matches) {
       this.crackFresh = true;
       this.tableJolted = this.tableDrained = true;
@@ -623,6 +645,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   private applyTable(): void {
+    this.sound.sound = this.prefs.sound;
+    this.sound.vibration = this.prefs.vibration;
     const now = new Date();
     this.seasonAvailable = this.prefs.seasonal ? previewSeason() ?? activeSeason(now) : null;
     this.season = this.seasonAvailable && this.prefs.seasonOff !== seasonKey(this.seasonAvailable, now) ? this.seasonAvailable : null;

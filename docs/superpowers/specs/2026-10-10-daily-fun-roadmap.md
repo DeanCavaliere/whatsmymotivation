@@ -93,7 +93,7 @@ Chunk 2 comes early because Halloween (October) is three weeks away.
   - a dice clatter when the dice are thrown;
   - a bright sting on a natural 20 and a sad "wah-wah" on a natural 1;
   - a quiet tick when a badge unlocks.
-- **Sound source:** CC0 samples or Web Audio synthesis. Downloading any asset needs the user's OK.
+- **Sound source (built):** the dice are recordings from Kenney's CC0 Casino Audio pack (converted to 22 kHz WAV, ~180 KB), run through a low-pass "felt" filter, with a second quieter recording chained on for a ~1 s tumble; two-dice recordings for advantage/disadvantage. The synthesized dice clicks were rejected as tinny. The natural 20 chime, natural 1 trombone and badge tick are Web Audio synthesis.
 - **iPhone silent switch:** set `navigator.audioSession.type = 'ambient'` where supported, so the ringer switch mutes the sound.
 - **Vibration:** `navigator.vibrate` when the dice land, with a distinct pattern for crits.
   - iOS Safari has no vibration API, so the vibration switch is hidden where it isn't supported.

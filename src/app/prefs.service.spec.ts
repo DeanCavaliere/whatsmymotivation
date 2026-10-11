@@ -19,7 +19,10 @@ describe('PrefsService', () => {
   });
 
   it('saves and reloads choices', () => {
-    const saved = {table: 'royal', accent: 'jade', dice: 'ruby', sides: 6 as const, nudge: false, seasonal: false, seasonOff: 'spooky-2026'};
+    const saved = {
+      table: 'royal', accent: 'jade', dice: 'ruby', sides: 6 as const, nudge: false, seasonal: false, seasonOff: 'spooky-2026',
+      sound: false, vibration: false,
+    };
     new PrefsService(storage).save(saved);
     expect(new PrefsService(storage).load()).toEqual(saved);
   });
