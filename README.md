@@ -15,7 +15,7 @@ Live at [whatsmymotivation.today](https://whatsmymotivation.today).
 - Stats stored in `localStorage`, in two tabs: daily rolls (each day's first roll: streaks, days rolled, distribution, recent days) and all rolls (lifetime/session counts, crits, distribution, recent rolls). Distributions are per die
 - Share a roll (Web Share API, or copy to clipboard)
 - Nudge the table: once a week, re-roll today's roll. It comes back every Sunday, and the daily stats track how often nudges helped or backfired. Can be switched off in Settings
-- Table themes and dice colors (Settings). The felt is one neutral texture tinted with CSS `background-blend-mode`, so a new table color is a one-line addition to `prefs.service.ts`
+- Accent colors (Copper, Arcane, Ember, Jade, Rose), table themes and dice colors (Settings). The felt is one neutral texture tinted with CSS `background-blend-mode`, so a new table color is a one-line addition to `prefs.service.ts`
 - Roll with the button, Space/Enter, or by tapping the table
 - Accessible: text meets WCAG AA contrast on every table theme, chosen options are marked by more than color, results are announced to screen readers, the chart has a table equivalent, and it supports keyboard focus, forced colors and reduced motion
 

@@ -143,6 +143,12 @@ describe('AppComponent', () => {
       expect(JSON.parse(store.get('wmm.prefs.v1')!)).toMatchObject({table: 'royal', dice: 'ruby', sides: 20});
     });
 
+    it('applies the chosen accent color', () => {
+      (fixture.nativeElement.querySelector('input[name="accent"][value="arcane"]') as HTMLInputElement).click();
+      expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#a58bff');
+      expect(JSON.parse(store.get('wmm.prefs.v1')!)).toMatchObject({accent: 'arcane'});
+    });
+
     it('rolls the chosen die and labels the result with it', async () => {
       const d6 = fixture.nativeElement.querySelector('input[name="sides"][value="6"]') as HTMLInputElement;
       d6.click();

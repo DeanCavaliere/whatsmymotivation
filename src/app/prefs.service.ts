@@ -36,6 +36,21 @@ export const DICE_COLORS: readonly DiceColor[] = [
   {id: 'obsidian', label: 'Obsidian', color: '#2a2a2e'},
 ];
 
+/** The app's accent. Each passes 4.5:1 on both dark surfaces and under dark button text. */
+export interface AccentColor {
+  id: string;
+  label: string;
+  color: string;
+}
+
+export const ACCENTS: readonly AccentColor[] = [
+  {id: 'copper', label: 'Copper', color: '#e0905a'},
+  {id: 'arcane', label: 'Arcane', color: '#a58bff'},
+  {id: 'ember', label: 'Ember', color: '#ff8466'},
+  {id: 'jade', label: 'Jade', color: '#3ecf8e'},
+  {id: 'rose', label: 'Rose', color: '#f472b6'},
+];
+
 export interface DieOption {
   sides: DieSides;
   blurb: string;
@@ -54,6 +69,8 @@ export const PREFS_KEY = 'wmm.prefs.v1';
 
 export interface Prefs {
   table: string;
+  /** Accent color id. */
+  accent: string;
   /** Dice color id. */
   dice: string;
   sides: DieSides;
@@ -61,10 +78,14 @@ export interface Prefs {
   nudge: boolean;
 }
 
-export const DEFAULT_PREFS: Prefs = {table: 'classic', dice: 'gold', sides: 20, nudge: true};
+export const DEFAULT_PREFS: Prefs = {table: 'classic', accent: 'copper', dice: 'gold', sides: 20, nudge: true};
 
 export function tableTheme(id: string): TableTheme {
   return TABLE_THEMES.find(t => t.id === id) ?? TABLE_THEMES[0];
+}
+
+export function accentColor(id: string): AccentColor {
+  return ACCENTS.find(a => a.id === id) ?? ACCENTS[0];
 }
 
 export function diceColor(id: string): DiceColor {
@@ -86,10 +107,12 @@ export class PrefsService {
     try {
       const raw = JSON.parse(this.storage?.getItem(PREFS_KEY) ?? 'null') as Record<string, unknown> | null;
       const table = raw?.['table'];
+      const accent = raw?.['accent'];
       const dice = raw?.['dice'];
       const sides = raw?.['sides'];
       return {
         table: TABLE_THEMES.some(t => t.id === table) ? table as string : DEFAULT_PREFS.table,
+        accent: ACCENTS.some(a => a.id === accent) ? accent as string : DEFAULT_PREFS.accent,
         dice: DICE_COLORS.some(d => d.id === dice) ? dice as string : DEFAULT_PREFS.dice,
         sides: isDieSides(sides) ? sides : DEFAULT_PREFS.sides,
         nudge: typeof raw?.['nudge'] === 'boolean' ? raw['nudge'] as boolean : DEFAULT_PREFS.nudge,

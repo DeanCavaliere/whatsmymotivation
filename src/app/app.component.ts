@@ -5,7 +5,18 @@ import {ConfettiComponent} from './components/confetti/confetti.component';
 import {ConfettiService} from './components/confetti/confetti.service';
 import {DiceService} from './dice.service';
 import {DieSides, dieOdds, keptValue, RollMode, Tier, tierFor, Verdict, verdictFor} from './motivation';
-import {DICE_COLORS, diceColor, DIE_OPTIONS, Prefs, PREFS_KEY, PrefsService, TABLE_THEMES, tableTheme} from './prefs.service';
+import {
+  accentColor,
+  ACCENTS,
+  DICE_COLORS,
+  diceColor,
+  DIE_OPTIONS,
+  Prefs,
+  PREFS_KEY,
+  PrefsService,
+  TABLE_THEMES,
+  tableTheme,
+} from './prefs.service';
 import {
   activeStreak,
   CountTotals,
@@ -90,10 +101,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly chart = CHART;
   readonly tableThemes = TABLE_THEMES;
   readonly diceColors = DICE_COLORS;
+  readonly accents = ACCENTS;
   readonly dieOptions = DIE_OPTIONS.map(d => ({...d, odds: dieOdds(d.sides)}));
   readonly dateFromKey = dateFromKey;
   readonly diceColorOf = diceColor;
   readonly tableThemeOf = tableTheme;
+  readonly accentOf = accentColor;
 
   ready = false;
   rolling = false;
@@ -378,6 +391,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.applyTable();
   }
 
+  setAccent(id: string): void {
+    this.prefs = {...this.prefs, accent: id};
+    this.prefsService.save(this.prefs);
+    this.applyTable();
+  }
+
   setDice(id: string): void {
     this.prefs = {...this.prefs, dice: id};
     this.prefsService.save(this.prefs);
@@ -440,6 +459,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const root = document.documentElement.style;
     root.setProperty('--felt', theme.felt);
     root.setProperty('--chalk', theme.chalk);
+    root.setProperty('--accent', accentColor(this.prefs.accent).color);
   }
 
   private showToast(message: string): void {

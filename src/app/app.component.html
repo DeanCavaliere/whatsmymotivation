@@ -323,6 +323,30 @@
 
       <details class="accordion" name="settings">
         <summary>
+          <span class="accordion-title">Accent color</span>
+          <span class="accordion-value">
+            <span class="visually-hidden">, currently </span>
+            <span class="swatch-chip swatch-accent" [style.--chip]="accentOf(prefs.accent).color" aria-hidden="true"></span>
+            {{ accentOf(prefs.accent).label }}
+          </span>
+        </summary>
+        <div class="accordion-body">
+          <fieldset class="swatches">
+            <legend class="visually-hidden">Accent color</legend>
+            @for (a of accents; track a.id) {
+              <label class="swatch">
+                <input type="radio" name="accent" [value]="a.id" [checked]="prefs.accent === a.id" (change)="setAccent(a.id)">
+                <span class="swatch-chip swatch-accent" [style.--chip]="a.color" aria-hidden="true"></span>
+                {{ a.label }}
+              </label>
+            }
+          </fieldset>
+          <p class="panel-note">Colors the buttons, selections and charts.</p>
+        </div>
+      </details>
+
+      <details class="accordion" name="settings">
+        <summary>
           <span class="accordion-title">Dice color</span>
           <span class="accordion-value">
             <span class="visually-hidden">, currently </span>

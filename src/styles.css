@@ -5,24 +5,24 @@
 :root {
   --ink: #dfe1e5;
   --ink-muted: #b8bcc2;
-  --surface: #2b2b2b;
-  --surface-raised: #3c3f41;
+  --surface: #161719;
+  --surface-raised: #222326;
   --line: rgba(255, 255, 255, 0.13);
   --hover: rgba(255, 255, 255, 0.07);
   /* Table theme; overridden at runtime from prefs.service.ts. */
   --felt: #10422f;
   --chalk: rgba(150, 230, 210, 0.6);
-  /* Chosen options get a light outline, plus a mark that doesn't rely on color. */
-  --selected: var(--ink);
-  --selected-fill: rgba(255, 255, 255, 0.1);
-  /* The main action: light on dark, 13:1. */
-  --primary: #e6e8eb;
-  --primary-hover: #ffffff;
-  --primary-ink: #1e1f22;
-  /* Keyboard focus, kept apart from the selected outline. */
-  --focus: #ffc66d;
-  /* Streak callouts. */
-  --highlight: #ffc66d;
+  /*
+   * The accent fills the main button and switches, and outlines chosen options (which also
+   * get a mark that doesn't rely on color). Overridden at runtime from prefs.service.ts.
+   */
+  --accent: #e0905a;
+  --accent-fill: color-mix(in srgb, var(--accent) 15%, transparent);
+  --accent-hover: color-mix(in srgb, var(--accent) 85%, white);
+  /* Text on the accent: 6.7:1 or better on every accent. */
+  --accent-ink: #141518;
+  /* Keyboard focus: a lighter tint of the accent, so it reads apart from a selection. */
+  --focus: color-mix(in srgb, var(--accent) 55%, white);
   --danger: #ff9b92;
 
   /* Result tiers, tuned to read on the felt and on the dark dialog. */
@@ -107,12 +107,12 @@ app-root {
 }
 
 .btn-primary {
-  background: var(--primary);
-  color: var(--primary-ink);
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--primary-hover);
+  background: var(--accent-hover);
 }
 
 .btn-ghost {
