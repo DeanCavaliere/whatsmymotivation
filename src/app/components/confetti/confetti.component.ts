@@ -1,23 +1,40 @@
-import {AfterViewInit, Component, ElementRef, Input, NgZone, OnDestroy, ViewChild, ChangeDetectionStrategy} from '@angular/core';
+import {AfterViewInit, Component, ElementRef, NgZone, OnDestroy, ViewChild, ChangeDetectionStrategy} from '@angular/core';
 import {Subscription} from 'rxjs';
-import {ConfettiKind, ConfettiService} from './confetti.service';
+import {ConfettiKind, ConfettiService, ConfettiTrigger} from './confetti.service';
 
 interface Piece {
   x: number;
   y: number;
   /** Pixels per second. */
-  speed: number;
-  drift: number;
+  vx: number;
+  vy: number;
   rotation: number;
   /** Degrees per second. */
   rotationSpeed: number;
   width: number;
   height: number;
-  color: string | null;
+  color: string;
+  star: boolean;
 }
 
-const COLORS = ['#ef1d27', '#009ee3', '#1f9c48', '#ffcd06'];
-const TEAR_IMAGE = 'assets/img/confetti/crying.webp';
+interface Physics {
+  count: number;
+  /** How long pieces fly before fading, then how long the fade takes, in milliseconds. */
+  duration: number;
+  fade: number;
+}
+
+const PHYSICS: Record<ConfettiKind, Physics> = {
+  'big-burst': {count: 150, duration: 900, fade: 1200},
+  'burst': {count: 50, duration: 600, fade: 900},
+  'fall': {count: 40, duration: 3000, fade: 1000},
+};
+
+const GOLD = ['#ffd54a', '#ffbf2e', '#fff1b0'];
+const FALL_COLORS = ['#ef1d27', '#009ee3', '#1f9c48', '#ffcd06'];
+/** Burst speed decays by e^-DRAG per second, so a piece travels about speed / DRAG pixels. */
+const DRAG = 2.1;
+const GRAVITY = 320;
 
 @Component({
     selector: 'app-confetti',
@@ -37,14 +54,9 @@ const TEAR_IMAGE = 'assets/img/confetti/crying.webp';
 export class ConfettiComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvas', {static: true}) canvasRef!: ElementRef<HTMLCanvasElement>;
 
-  /** How long pieces keep falling before fading, in milliseconds. */
-  @Input() duration = 3000;
-  @Input() fadeDuration = 1000;
-  @Input() count = 40;
-
   private ctx: CanvasRenderingContext2D | null = null;
   private pieces: Piece[] = [];
-  private tearImage: HTMLImageElement | null = null;
+  private kind: ConfettiKind = 'burst';
   private frameId = 0;
   private startTime = 0;
   private lastTime = 0;
@@ -56,7 +68,7 @@ export class ConfettiComponent implements AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     this.ctx = this.canvasRef.nativeElement.getContext('2d');
-    this.subscription = this.confetti.trigger$.subscribe(kind => this.zone.runOutsideAngular(() => this.start(kind)));
+    this.subscription = this.confetti.trigger$.subscribe(t => this.zone.runOutsideAngular(() => this.start(t)));
   }
 
   ngOnDestroy(): void {
@@ -64,38 +76,55 @@ export class ConfettiComponent implements AfterViewInit, OnDestroy {
     this.stop();
   }
 
-  private start(kind: ConfettiKind): void {
+  private start({kind, origin}: ConfettiTrigger): void {
     if (!this.ctx || this.reducedMotion?.matches) {
       return;
     }
-    if (kind === 'tears' && !this.tearImage?.complete) {
-      // Loaded on first use so it never competes with the initial page load.
-      this.tearImage = new Image();
-      this.tearImage.onload = () => this.start(kind);
-      this.tearImage.src = TEAR_IMAGE;
-      return;
-    }
-
     cancelAnimationFrame(this.frameId);
     const {width, height} = this.resize();
-    this.pieces = Array.from({length: this.count}, () => this.createPiece(kind, width, height));
+    const from = origin ?? {x: width / 2, y: height / 2};
+    // Bursts use the app's accent, read at the moment of the roll.
+    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || GOLD[0];
+    this.kind = kind;
+    this.pieces = Array.from({length: PHYSICS[kind].count}, () =>
+      kind === 'fall' ? this.fallingPiece(width, height) : this.burstPiece(kind, from, Math.min(width, height), accent));
     this.startTime = this.lastTime = performance.now();
     this.frameId = requestAnimationFrame(this.draw);
   }
 
-  private createPiece(kind: ConfettiKind, width: number, height: number): Piece {
-    const tears = kind === 'tears';
-    const size = tears ? 34 + Math.random() * 30 : 10 + Math.random() * 10;
+  private burstPiece(kind: ConfettiKind, from: { x: number; y: number }, spread: number, accent: string): Piece {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = (0.35 + Math.random() * 0.65) * spread * (kind === 'big-burst' ? 1.25 : 0.8);
+    const size = 5 + Math.random() * 7;
+    const colors = [accent, accent, ...GOLD];
+    return {
+      x: from.x,
+      y: from.y,
+      vx: Math.cos(angle) * speed,
+      // A slight upward bias, so the burst arcs up before gravity takes over.
+      vy: Math.sin(angle) * speed - speed * 0.35,
+      rotation: Math.random() * 360,
+      rotationSpeed: (Math.random() - 0.5) * 900,
+      width: size,
+      height: size * 0.55,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      star: Math.random() < 0.18,
+    };
+  }
+
+  private fallingPiece(width: number, height: number): Piece {
+    const size = 10 + Math.random() * 10;
     return {
       x: Math.random() * width,
       y: -Math.random() * height - size,
-      speed: (tears ? 160 : 180) + Math.random() * 180,
-      drift: (Math.random() - 0.5) * 60,
+      vx: (Math.random() - 0.5) * 60,
+      vy: 180 + Math.random() * 180,
       rotation: Math.random() * 360,
-      rotationSpeed: (tears ? 40 : 120) + Math.random() * 200,
+      rotationSpeed: 120 + Math.random() * 200,
       width: size,
-      height: tears ? size * 0.65 : size * 0.4,
-      color: tears ? null : COLORS[Math.floor(Math.random() * COLORS.length)],
+      height: size * 0.4,
+      color: FALL_COLORS[Math.floor(Math.random() * FALL_COLORS.length)],
+      star: false,
     };
   }
 
@@ -128,34 +157,38 @@ export class ConfettiComponent implements AfterViewInit, OnDestroy {
     const dt = Math.min((now - this.lastTime) / 1000, 0.05);
     this.lastTime = now;
 
-    const elapsed = now - this.startTime;
-    const fadeProgress = Math.max(0, elapsed - this.duration) / this.fadeDuration;
+    const {duration, fade} = PHYSICS[this.kind];
+    const fadeProgress = Math.max(0, now - this.startTime - duration) / fade;
     if (fadeProgress >= 1) {
       this.stop();
       return;
     }
-    const alpha = 1 - fadeProgress;
+    const falling = this.kind === 'fall';
+    const damping = Math.exp(-DRAG * dt);
 
     ctx.clearRect(0, 0, width, height);
+    ctx.globalAlpha = 1 - fadeProgress;
     for (const p of this.pieces) {
-      p.y += p.speed * dt;
-      p.x += p.drift * dt;
+      if (!falling) {
+        p.vx *= damping;
+        p.vy = p.vy * damping + GRAVITY * dt;
+      }
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
       p.rotation += p.rotationSpeed * dt;
-      if (p.y - p.height > height) {
+      if (falling && p.y - p.height > height) {
         p.y = -p.height;
         p.x = Math.random() * width;
       }
 
       ctx.save();
-      ctx.globalAlpha = alpha;
       ctx.translate(p.x, p.y);
       ctx.rotate((p.rotation * Math.PI) / 180);
-      if (p.color) {
-        ctx.fillStyle = p.color;
+      ctx.fillStyle = p.color;
+      if (p.star) {
+        drawStar(ctx, p.width * 0.9);
+      } else {
         ctx.fillRect(-p.width / 2, -p.height / 2, p.width, p.height);
-      } else if (this.tearImage) {
-        const h = p.width * (this.tearImage.naturalHeight / this.tearImage.naturalWidth);
-        ctx.drawImage(this.tearImage, -p.width / 2, -h / 2, p.width, h);
       }
       ctx.restore();
     }
@@ -169,4 +202,14 @@ export class ConfettiComponent implements AfterViewInit, OnDestroy {
     const canvas = this.canvasRef.nativeElement;
     this.ctx?.clearRect(0, 0, canvas.width, canvas.height);
   }
+}
+
+/** A four-pointed sparkle. */
+function drawStar(ctx: CanvasRenderingContext2D, radius: number): void {
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const r = i % 2 ? radius * 0.3 : radius;
+    ctx.lineTo(Math.cos(i * Math.PI / 4) * r, Math.sin(i * Math.PI / 4) * r);
+  }
+  ctx.fill();
 }

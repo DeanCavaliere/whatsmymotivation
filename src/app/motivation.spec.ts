@@ -27,11 +27,11 @@ describe('motivation', () => {
     expect(dieOdds(4)).toEqual({crit: 1 / 4, good: 2 / 4, bad: 1 / 4});
   });
 
-  it('celebrates highs with confetti and lows with tears', () => {
-    expect(celebrationFor('crit-success')).toBe('confetti');
-    expect(celebrationFor('very-high')).toBe('confetti');
-    expect(celebrationFor('crit-fail')).toBe('tears');
-    expect(celebrationFor('very-low')).toBe('tears');
+  it('bursts on highs, cracks the table on a 1 and leaves other lows alone', () => {
+    expect(celebrationFor('crit-success')).toBe('big-burst');
+    expect(celebrationFor('very-high')).toBe('burst');
+    expect(celebrationFor('crit-fail')).toBe('crack');
+    expect(celebrationFor('very-low')).toBeNull();
     expect(celebrationFor('mid')).toBeNull();
   });
 

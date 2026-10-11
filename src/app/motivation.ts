@@ -10,7 +10,8 @@ export function isDieSides(n: unknown): n is DieSides {
 
 export type Tier = 'crit-fail' | 'very-low' | 'low' | 'mid' | 'high' | 'very-high' | 'crit-success';
 
-export type Celebration = 'confetti' | 'tears' | null;
+/** A natural top face gets the big burst, 15-19 on the d20 scale a small one; a natural 1 cracks the table. */
+export type Celebration = 'big-burst' | 'burst' | 'crack' | null;
 
 export interface Verdict {
   tier: Tier;
@@ -84,12 +85,12 @@ export function dieOdds(sides: DieSides): { crit: number; good: number; bad: num
 
 export function celebrationFor(tier: Tier): Celebration {
   switch (tier) {
-    case 'crit-fail':
-    case 'very-low':
-      return 'tears';
-    case 'very-high':
     case 'crit-success':
-      return 'confetti';
+      return 'big-burst';
+    case 'very-high':
+      return 'burst';
+    case 'crit-fail':
+      return 'crack';
     default:
       return null;
   }

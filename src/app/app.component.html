@@ -45,16 +45,28 @@
     </div>
   </header>
 
-  <main class="table" [class.is-nudged]="tableNudged" (click)="onTableClick($event)">
+  <main #table class="table" [class.is-nudged]="tableNudged" [class.is-jolted]="tableJolted" [class.is-drained]="tableDrained">
     <svg class="table-text" [class.is-dimmed]="result" viewBox="0 0 1000 1000" aria-hidden="true">
       <defs>
         <path id="arc-top" d="M 190 500 A 310 310 0 0 1 810 500"/>
         <path id="arc-bottom" d="M 150 500 A 350 350 0 0 0 850 500"/>
       </defs>
       <text><textPath href="#arc-top" startOffset="50%">What's My Motivation Today?</textPath></text>
-      <text class="hint-keyboard"><textPath href="#arc-bottom" startOffset="50%">Press Space to Roll for Motivation</textPath></text>
-      <text class="hint-touch"><textPath href="#arc-bottom" startOffset="50%">Tap the Table to Roll for Motivation</textPath></text>
+      <text><textPath href="#arc-bottom" startOffset="50%">Hit “Roll for Motivation” Above</textPath></text>
     </svg>
+
+    @if (crack && crackBox; as box) {
+      <svg class="crack" [class.is-fresh]="crackFresh" aria-hidden="true"
+        [attr.viewBox]="-box.x + ' ' + -box.y + ' ' + box.width + ' ' + box.height"
+        [style.--crack-x.px]="box.x" [style.--crack-y.px]="box.y">
+        <g [attr.transform]="'scale(' + box.scale + ')'">
+          @for (p of crack; track $index) {
+            <path class="crack-edge" [attr.d]="p.d" [attr.stroke-width]="p.width + 1.5" vector-effect="non-scaling-stroke"/>
+            <path class="crack-line" [attr.d]="p.d" [attr.stroke-width]="p.width" vector-effect="non-scaling-stroke"/>
+          }
+        </g>
+      </svg>
+    }
 
     <section class="result" aria-label="Result">
       @if (result; as r) {

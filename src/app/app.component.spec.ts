@@ -75,17 +75,26 @@ describe('AppComponent', () => {
       expect(fixture.nativeElement.querySelector('.result-value').textContent.trim()).toBe('12');
     });
 
-    it('rolls on Space when nothing interactive is focused', async () => {
+    it('does not roll on Space, so a stray key press can\'t replace the day\'s roll', async () => {
       window.dispatchEvent(new KeyboardEvent('keydown', {key: ' '}));
       await fixture.whenStable();
-      expect(app.sessionRolls).toBe(1);
+      expect(app.sessionRolls).toBe(0);
     });
 
-    it('ignores Space on a focused button so the press is not counted twice', async () => {
-      const button: HTMLButtonElement = fixture.nativeElement.querySelector('.btn-primary');
-      button.dispatchEvent(new KeyboardEvent('keydown', {key: ' ', bubbles: true}));
+    it('does not roll when the table is clicked', async () => {
+      fixture.nativeElement.querySelector('.table').click();
       await fixture.whenStable();
       expect(app.sessionRolls).toBe(0);
+    });
+
+    it('shares the day\'s roll, not a later practice roll', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', {value: {writeText}, configurable: true});
+      await app.roll();
+      dice.next = [3];
+      await app.roll();
+      await app.share();
+      expect(writeText.mock.calls[0][0]).toMatch(/🎲 12\n.*\nhttps:\/\/whatsmymotivation\.today$/);
     });
 
     it('keeps the higher die with advantage and shows the dropped one', async () => {
@@ -179,6 +188,27 @@ describe('AppComponent', () => {
       expect(fixture.nativeElement.querySelector('.result-label').textContent).toContain('nudged');
       expect(fixture.nativeElement.querySelector('.result-sub').textContent).toContain('was 3');
       expect(nudgeButton()).toBeUndefined();
+    });
+
+    it('keeps a natural 1\'s crack through practice rolls until a nudge replaces it', async () => {
+      dice.next = [1];
+      await app.roll();
+      expect(app.crack).not.toBeNull();
+      dice.next = [15];
+      await app.roll();
+      expect(app.crack).not.toBeNull();
+      await app.nudge();
+      expect(app.crack).toBeNull();
+    });
+
+    it('cracks the table for a practice 1 only while it is shown', async () => {
+      await app.roll();
+      dice.next = [1];
+      await app.roll();
+      expect(app.crack).not.toBeNull();
+      dice.next = [9];
+      await app.roll();
+      expect(app.crack).toBeNull();
     });
 
     it('hides the nudge when it is switched off', async () => {

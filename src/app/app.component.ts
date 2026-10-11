@@ -3,8 +3,10 @@ import {DatePipe, DecimalPipe, PercentPipe} from '@angular/common';
 import {SwUpdate} from '@angular/service-worker';
 import {ConfettiComponent} from './components/confetti/confetti.component';
 import {ConfettiService} from './components/confetti/confetti.service';
+import {CrackPath, crackPaths} from './crack';
+import {shareText} from './share';
 import {DiceService} from './dice.service';
-import {DieSides, dieOdds, keptValue, RollMode, Tier, tierFor, Verdict, verdictFor} from './motivation';
+import {Celebration, DieSides, dieOdds, keptValue, RollMode, Tier, tierFor, Verdict, verdictFor} from './motivation';
 import {
   accentColor,
   ACCENTS,
@@ -25,6 +27,7 @@ import {
   DayRoll,
   DieSummary,
   dieSummaries,
+  localDateKey,
   nudgeUsedThisWeek,
   Stats,
   STATS_KEY,
@@ -79,6 +82,17 @@ export type InstallOption = 'prompt' | 'ios' | 'installed' | null;
 
 const SITE_URL = 'https://whatsmymotivation.today';
 const CHART = {width: 400, height: 120, gap: 2, maxBarWidth: 40};
+/** Crack paths are drawn this far out, then scaled to the table. */
+const CRACK_REACH = 1000;
+
+/** Where the crack starts (the result number), in the felt's own pixels. */
+interface CrackBox {
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  scale: number;
+}
 
 @Component({
     selector: 'app-root',
@@ -88,6 +102,7 @@ const CHART = {width: 400, height: 120, gap: 2, maxBarWidth: 40};
     imports: [ConfettiComponent, DecimalPipe, DatePipe, PercentPipe]
 })
 export class AppComponent implements AfterViewInit, OnDestroy {
+  @ViewChild('table', {static: true}) tableRef!: ElementRef<HTMLElement>;
   @ViewChild('diceBox', {static: true}) diceBoxRef!: ElementRef<HTMLElement>;
   @ViewChild('statsDialog', {static: true}) statsDialogRef!: ElementRef<HTMLDialogElement>;
   @ViewChild('settingsDialog', {static: true}) settingsDialogRef!: ElementRef<HTMLDialogElement>;
@@ -121,6 +136,14 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   nudgeUsed = false;
   /** Briefly true while the table shakes for a nudge. */
   tableNudged = false;
+  /** Briefly true while the table jolts and loses its color on a natural 1. */
+  tableJolted = false;
+  tableDrained = false;
+  /** The crack left by a natural 1. It stays all day while that 1 is the day's roll. */
+  crack: CrackPath[] | null = null;
+  crackBox: CrackBox | null = null;
+  /** Whether the crack just appeared, so it spreads instead of being already there. */
+  crackFresh = false;
   sessionRolls = 0;
   statsTab: StatsTab = 'daily';
   /** The die picked in the stats dialog, when rolls span more than one. */
@@ -136,6 +159,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private installPrompt: BeforeInstallPromptEvent | null = null;
   private toastTimer?: ReturnType<typeof setTimeout>;
   private shakeTimer?: ReturnType<typeof setTimeout>;
+  private joltTimer?: ReturnType<typeof setTimeout>;
+  private drainTimer?: ReturnType<typeof setTimeout>;
+  private resizeObserver?: ResizeObserver;
+  private reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
 
   constructor(private dice: DiceService,
               private statsService: StatsService,
@@ -150,7 +177,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.install = detectInstallOption();
     this.stats = this.statsService.load();
     this.refreshDerived();
-    const today = todayRoll(this.stats);
+    const today = this.today;
     if (today) {
       this.result = {
         value: today.value,
@@ -164,31 +191,23 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         newBest: false,
       };
     }
+    this.refreshCrack();
   }
 
   ngAfterViewInit(): void {
     this.dice.init(this.diceBoxRef.nativeElement).then(() => this.zone.run(() => this.ready = true));
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(() => this.zone.run(() => this.measureCrack()));
+      this.resizeObserver.observe(this.tableRef.nativeElement);
+    }
   }
 
   ngOnDestroy(): void {
     clearTimeout(this.toastTimer);
     clearTimeout(this.shakeTimer);
-  }
-
-  @HostListener('window:keydown', ['$event'])
-  onKeydown(event: KeyboardEvent): void {
-    if (event.key !== ' ' && event.key !== 'Enter') {
-      return;
-    }
-    // Let focused buttons handle their own activation, otherwise one press would roll twice.
-    const target = event.target;
-    if (target instanceof Element && target.closest('button, a, input, select, textarea, dialog')) {
-      return;
-    }
-    event.preventDefault();
-    if (!event.repeat) {
-      this.roll();
-    }
+    clearTimeout(this.joltTimer);
+    clearTimeout(this.drainTimer);
+    this.resizeObserver?.disconnect();
   }
 
   /** Keeps counters in sync when another tab rolls. */
@@ -255,6 +274,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
     this.rolling = true;
     this.result = null;
+    this.refreshCrack();
     this.announcement = '';
     const mode = this.mode;
     const sides = this.prefs.sides;
@@ -288,17 +308,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         newBest: !nudge && !before && this.streak > 1 && this.streak > previousBest,
       };
       this.announcement = announce(this.result, this.resultLabel(this.result, ', '));
-      if (verdict.celebration) {
-        this.confetti.trigger(verdict.celebration);
-      }
+      this.refreshCrack();
+      this.celebrate(verdict.celebration);
     } finally {
       this.rolling = false;
-    }
-  }
-
-  onTableClick(event: MouseEvent): void {
-    if (!(event.target instanceof Element && event.target.closest('button'))) {
-      this.roll();
     }
   }
 
@@ -325,20 +338,18 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     ].filter(Boolean).join(separator);
   }
 
+  /** Shares the day's roll and the last week, not a practice roll. */
   async share(): Promise<void> {
-    if (!this.result) {
+    if (!this.today) {
       return;
     }
-    const {value, sides, mode, verdict} = this.result;
-    const die = sides === 20 ? '' : ` on a d${sides}`;
-    const how = mode === 'normal' ? '' : ` with ${mode}`;
-    const text = `I rolled a ${value}${die}${how} for motivation today 🎲 "${verdict.message}"`;
+    const text = shareText(this.today, this.stats.days, this.streak);
     try {
       if (navigator.share) {
         await navigator.share({text, url: SITE_URL});
         return;
       }
-      await navigator.clipboard.writeText(`${text} ${SITE_URL}`);
+      await navigator.clipboard.writeText(`${text}\n${SITE_URL}`);
       this.showToast('Copied to clipboard');
     } catch (err) {
       if ((err as DOMException)?.name !== 'AbortError') {
@@ -444,6 +455,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.streakAtRisk = streakAtRisk(this.stats);
     this.nudgeUsed = nudgeUsedThisWeek(this.stats);
     this.refreshStatsView();
+    this.refreshCrack();
   }
 
   /** Charts the picked die, else the one being rolled now, else whichever has rolls. */
@@ -452,6 +464,51 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const die = dice.find(d => d.sides === this.chartSides) ?? dice.find(d => d.sides === this.prefs.sides) ?? dice[0] ?? null;
     this.statsView = {dice, die, bars: die ? chartBars(die.faces) : []};
     this.hoveredBar = null;
+  }
+
+  /** Shows the crack while a natural 1 is on the table or is the day's roll. */
+  private refreshCrack(): void {
+    const dayIsOne = !!this.today && tierFor(this.today.value, this.today.sides) === 'crit-fail';
+    if (!dayIsOne && this.result?.verdict.tier !== 'crit-fail') {
+      this.crack = null;
+      return;
+    }
+    this.crack ??= crackPaths(localDateKey(new Date()), CRACK_REACH);
+  }
+
+  /** The crack starts under the result number; offsets ignore transforms, so the landing animation doesn't move it. */
+  private measureCrack(): void {
+    const table = this.tableRef.nativeElement;
+    const width = table.clientWidth;
+    const height = table.clientHeight;
+    const value = table.querySelector<HTMLElement>('.result-value');
+    const parent = value?.offsetParent as HTMLElement | null;
+    this.crackBox = {
+      width,
+      height,
+      x: value && parent ? parent.offsetLeft + value.offsetLeft + value.offsetWidth / 2 : width / 2,
+      y: value && parent ? parent.offsetTop + value.offsetTop + value.offsetHeight / 2 : height / 2,
+      scale: Math.hypot(width, height) / 2 / CRACK_REACH,
+    };
+  }
+
+  /** Runs after the result renders, so effects can start from the number. */
+  private celebrate(celebration: Celebration): void {
+    if (celebration === 'crack' && !this.reducedMotion?.matches) {
+      this.crackFresh = true;
+      this.tableJolted = this.tableDrained = true;
+      clearTimeout(this.joltTimer);
+      clearTimeout(this.drainTimer);
+      this.joltTimer = setTimeout(() => this.tableJolted = false, 450);
+      this.drainTimer = setTimeout(() => this.tableDrained = false, 2600);
+    }
+    requestAnimationFrame(() => {
+      this.measureCrack();
+      if (celebration === 'burst' || celebration === 'big-burst') {
+        const rect = this.tableRef.nativeElement.querySelector('.result-value')?.getBoundingClientRect();
+        this.confetti.trigger(celebration, rect ? {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2} : undefined);
+      }
+    });
   }
 
   private applyTable(): void {
