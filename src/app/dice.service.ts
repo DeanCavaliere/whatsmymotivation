@@ -1,5 +1,4 @@
 import {Injectable, isDevMode, NgZone} from '@angular/core';
-import DiceBox from '@3d-dice/dice-box';
 import {diceNotation, DieSides, randomFace, RollMode} from './motivation';
 
 /** Dev builds only: results queued with ?rolls=20,1 replace the next rolls, to preview effects. */
@@ -34,6 +33,8 @@ export class DiceService {
     }
     try {
       await this.zone.runOutsideAngular(async () => {
+        // Loaded on demand: most of it is the physics worker, which would otherwise hold up the first paint.
+        const {default: DiceBox} = await import('@3d-dice/dice-box');
         const aspect = container.clientWidth / Math.max(container.clientHeight, 1);
         this.box = new DiceBox({
           container: '#' + container.id,

@@ -1,5 +1,4 @@
 import {AfterViewInit, Component, ElementRef, HostListener, isDevMode, NgZone, OnDestroy, Optional, ViewChild, ChangeDetectionStrategy} from '@angular/core';
-import {DatePipe, DecimalPipe, PercentPipe} from '@angular/common';
 import {SwUpdate} from '@angular/service-worker';
 import {ConfettiComponent} from './components/confetti/confetti.component';
 import {TableWeatherComponent} from './components/table-weather/table-weather.component';
@@ -8,6 +7,7 @@ import {ConfettiService} from './components/confetti/confetti.service';
 import {Badge, BADGES, newBadges, Progress} from './achievements';
 import {CalendarDay, CalendarMonth, calendarMonth, earliestMonth, shiftMonth} from './calendar';
 import {CrackPath, crackPaths} from './crack';
+import {formatAverage, formatCount, formatDate, formatPercent} from './format';
 import {NOTE_LIMIT, questById} from './quests';
 import {activeSeason, Season, seasonKey, SEASONS} from './seasons';
 import {shareText} from './share';
@@ -131,7 +131,7 @@ interface CrackBox {
     templateUrl: './app.component.html',
     styleUrls: ['./app.component.css'],
     changeDetection: ChangeDetectionStrategy.Eager,
-    imports: [ConfettiComponent, TableWeatherComponent, DecimalPipe, DatePipe, PercentPipe]
+    imports: [ConfettiComponent, TableWeatherComponent]
 })
 export class AppComponent implements AfterViewInit, OnDestroy {
   @ViewChild('table', {static: true}) tableRef!: ElementRef<HTMLElement>;
@@ -155,6 +155,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly accents = ACCENTS;
   readonly dieOptions = DIE_OPTIONS.map(d => ({...d, odds: dieOdds(d.sides)}));
   readonly dateFromKey = dateFromKey;
+  readonly formatDate = formatDate;
+  readonly formatCount = formatCount;
+  readonly formatAverage = formatAverage;
+  readonly formatPercent = formatPercent;
   readonly diceColorOf = diceColor;
   readonly tableThemeOf = tableTheme;
   readonly accentOf = accentColor;

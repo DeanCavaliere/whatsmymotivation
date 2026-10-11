@@ -236,9 +236,9 @@
                 <strong>{{ b.badge.name }}<span class="visually-hidden">{{ b.earned ? ', earned' : ', not earned yet' }}</span></strong>
                 <span>{{ b.badge.description }}</span>
                 @if (b.earned) {
-                  <span class="badge-when">Earned {{ dateFromKey(b.earned) | date:'MMM d, y' }}</span>
+                  <span class="badge-when">Earned {{ formatDate(dateFromKey(b.earned), 'day') }}</span>
                 } @else if (b.progress; as pr) {
-                  <span class="badge-progress">{{ pr.current | number }} of {{ pr.goal | number }} {{ pr.unit }}</span>
+                  <span class="badge-progress">{{ formatCount(pr.current) }} of {{ formatCount(pr.goal) }} {{ pr.unit }}</span>
                   <span class="progress" aria-hidden="true"><i [style.width.%]="pr.current / pr.goal * 100"></i></span>
                 }
               </span>
@@ -273,11 +273,11 @@
             <section class="calendar" aria-labelledby="calendar-title">
               <div class="calendar-head">
                 <div>
-                  <h3 id="calendar-title">{{ dateFromKey(calendarDay) | date:'MMMM y' }}</h3>
+                  <h3 id="calendar-title">{{ formatDate(dateFromKey(calendarDay), 'month') }}</h3>
                   <p class="calendar-summary">
                     <strong>{{ cal.rolled }}</strong> {{ cal.rolled === 1 ? 'day' : 'days' }} rolled
                     @if (cal.average !== null) {
-                      · average <strong>{{ cal.average | number:'1.1-1' }}</strong>{{ cal.averageSides === 20 ? '' : ' on the d' + cal.averageSides }}
+                      · average <strong>{{ formatAverage(cal.average) }}</strong>{{ cal.averageSides === 20 ? '' : ' on the d' + cal.averageSides }}
                     }
                     · <strong>{{ cal.crits }}</strong> {{ cal.crits === 1 ? 'crit' : 'crits' }}
                   </p>
@@ -334,7 +334,7 @@
                 }
               </ul>
               <div class="calendar-details" [attr.data-tier]="calendarRoll ? tierOf(calendarRoll.value, calendarRoll.sides) : null">
-                <h4>{{ dateFromKey(calendarDay) | date:'EEEE, MMMM d' }}</h4>
+                <h4>{{ formatDate(dateFromKey(calendarDay), 'weekday') }}</h4>
                 @if (calendarRoll; as r) {
                   <p class="calendar-details-roll">Rolled <strong>{{ r.value }}</strong> on the d{{ r.sides }}{{ r.mode === 'normal' ? '' : ' with ' + r.mode }}</p>
                   @if (r.rerolledFrom; as from) {
@@ -426,14 +426,14 @@
           <p class="chart-readout" aria-hidden="true">
             @if (hoveredBar) {
               Rolled a <strong>{{ hoveredBar.face }}</strong> {{ hoveredBar.count }} {{ hoveredBar.count === 1 ? 'time' : 'times' }}
-              ({{ hoveredBar.count / die.rolls | percent }})
+              ({{ formatPercent(hoveredBar.count / die.rolls) }})
             } @else {
-              Average <strong>{{ die.average | number:'1.1-1' }}</strong> across {{ die.rolls }}
+              Average <strong>{{ formatAverage(die.average) }}</strong> across {{ die.rolls }}
               {{ statsTab === 'daily' ? (die.rolls === 1 ? 'day' : 'days') : (die.rolls === 1 ? 'roll' : 'rolls') }}
               on the d{{ die.sides }}. Hover a bar for details.
             }
           </p>
-          <p class="visually-hidden">Average {{ die.average | number:'1.1-1' }} on the d{{ die.sides }}.</p>
+          <p class="visually-hidden">Average {{ formatAverage(die.average) }} on the d{{ die.sides }}.</p>
         }
 
         @if (statsTab === 'daily') {
@@ -464,12 +464,12 @@
             <ol class="history" aria-labelledby="recent-rolls-title">
               @for (h of stats.history; track $index) {
                 <li [attr.data-tier]="tierOf(h.value, h.sides)"
-                  [title]="(h.at | date:'medium') + (h.mode === 'normal' ? '' : ' · ' + h.mode) + (h.reroll ? ' · reroll' : '')">
+                  [title]="formatDate(h.at, 'moment') + (h.mode === 'normal' ? '' : ' · ' + h.mode) + (h.reroll ? ' · reroll' : '')">
                   <span>{{ h.value }}</span>
                   @if (h.sides !== 20) {
                     <span class="history-date">d{{ h.sides }}</span>
                   }
-                  <span class="visually-hidden">, {{ h.at | date:'medium' }}{{ h.mode === 'normal' ? '' : ', ' + h.mode }}{{ h.reroll ? ', reroll' : '' }}</span>
+                  <span class="visually-hidden">, {{ formatDate(h.at, 'moment') }}{{ h.mode === 'normal' ? '' : ', ' + h.mode }}{{ h.reroll ? ', reroll' : '' }}</span>
                 </li>
               }
             </ol>
@@ -517,8 +517,8 @@
                   (change)="setSides(d.sides)">
                 <span class="die-name"><strong [id]="'die-' + d.sides + '-name'">d{{ d.sides }}</strong> <small [id]="'die-' + d.sides + '-blurb'">{{ d.blurb }}</small></span>
                 <span [id]="'die-' + d.sides + '-crit'"><span class="visually-hidden">Crit: </span>1 in {{ d.sides }}</span>
-                <span [id]="'die-' + d.sides + '-good'"><span class="visually-hidden">Good day: </span>{{ d.odds.good | percent }}</span>
-                <span [id]="'die-' + d.sides + '-bad'"><span class="visually-hidden">Bad day: </span>{{ d.odds.bad | percent }}</span>
+                <span [id]="'die-' + d.sides + '-good'"><span class="visually-hidden">Good day: </span>{{ formatPercent(d.odds.good) }}</span>
+                <span [id]="'die-' + d.sides + '-bad'"><span class="visually-hidden">Bad day: </span>{{ formatPercent(d.odds.bad) }}</span>
               </label>
             }
           </fieldset>
