@@ -32,8 +32,7 @@ const TEAR_IMAGE = 'assets/img/confetti/crying.webp';
       z-index: 50;
     }
   `],
-    changeDetection: ChangeDetectionStrategy.Eager,
-    standalone: false
+    changeDetection: ChangeDetectionStrategy.Eager
 })
 export class ConfettiComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvas', {static: true}) canvasRef!: ElementRef<HTMLCanvasElement>;

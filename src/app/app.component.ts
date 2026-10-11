@@ -1,4 +1,6 @@
 import {AfterViewInit, Component, ElementRef, HostListener, NgZone, OnDestroy, ViewChild, ChangeDetectionStrategy} from '@angular/core';
+import {DatePipe, DecimalPipe} from '@angular/common';
+import {ConfettiComponent} from './components/confetti/confetti.component';
 import {ConfettiService} from './components/confetti/confetti.service';
 import {DiceService} from './dice.service';
 import {keptValue, RollMode, Tier, tierFor, Verdict, verdictFor} from './motivation';
@@ -29,7 +31,7 @@ const CHART = {width: 400, height: 120, gap: 2, barWidth: 18};
     templateUrl: './app.component.html',
     styleUrls: ['./app.component.css'],
     changeDetection: ChangeDetectionStrategy.Eager,
-    standalone: false
+    imports: [ConfettiComponent, DecimalPipe, DatePipe]
 })
 export class AppComponent implements AfterViewInit, OnDestroy {
   @ViewChild('diceBox', {static: true}) diceBoxRef!: ElementRef<HTMLElement>;

@@ -1,6 +1,5 @@
 import {ComponentFixture, TestBed} from '@angular/core/testing';
 import {AppComponent} from './app.component';
-import {ConfettiComponent} from './components/confetti/confetti.component';
 import {DiceService} from './dice.service';
 import {RollMode} from './motivation';
 import {KeyValueStorage, STATS_STORAGE} from './stats.service';
@@ -32,7 +31,7 @@ describe('AppComponent', () => {
     };
     dice = new FakeDiceService();
     await TestBed.configureTestingModule({
-      declarations: [AppComponent, ConfettiComponent],
+      imports: [AppComponent],
       providers: [
         {provide: DiceService, useValue: dice},
         {provide: STATS_STORAGE, useValue: storage},
