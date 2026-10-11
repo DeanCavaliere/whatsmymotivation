@@ -11,10 +11,11 @@ Live at [whatsmymotivation.today](https://whatsmymotivation.today).
 - The first roll of each day is "today's roll"; later rolls are re-rolls
 - Daily streaks (current and best), with a nudge when today's roll would keep one going
 - Installable and works offline: a service worker (`ngsw-config.json`) caches the app, artwork and dice physics. It is only enabled in production builds
-- Pick your die (d4 to d20) in Customize, with each one's odds of a crit, a good day and a bad day. Smaller dice are swingier; every die crits on its top face and fails on a 1
+- Pick your die (d4 to d20) in Settings (the cog button), with each one's odds of a crit, a good day and a bad day. Smaller dice are swingier; every die crits on its top face and fails on a 1
 - Stats stored in `localStorage`, in two tabs: daily rolls (each day's first roll: streaks, days rolled, distribution, recent days) and all rolls (lifetime/session counts, crits, distribution, recent rolls). Distributions are per die
 - Share a roll (Web Share API, or copy to clipboard)
-- Table themes and dice colors (Customize, the palette button). The felt is one neutral texture tinted with CSS `background-blend-mode`, so a new table color is a one-line addition to `prefs.service.ts`
+- Nudge the table: once a week, re-roll today's roll. It comes back every Sunday, and the daily stats track how often nudges helped or backfired. Can be switched off in Settings
+- Table themes and dice colors (Settings). The felt is one neutral texture tinted with CSS `background-blend-mode`, so a new table color is a one-line addition to `prefs.service.ts`
 - Roll with the button, Space/Enter, or by tapping the table
 
 ## Development
@@ -36,6 +37,7 @@ Pushing to `master` deploys to GitHub Pages via `.github/workflows/workflow.yml`
 | --- | --- |
 | `src/app/motivation.ts` | Pure game logic: tiers, messages, advantage/disadvantage |
 | `src/app/stats.service.ts` | Persistent stats (versioned key, migrates older versions, multi-tab safe) |
+| `src/panels.css` | Styles for the stats and settings dialogs |
 | `src/app/prefs.service.ts` | Die choice, table themes, dice colors and the saved choice |
 | `src/app/dice.service.ts` | dice-box wrapper: init, physics tuning, fallback |
 | `src/app/components/confetti` | Canvas confetti / tears overlay |

@@ -36,6 +36,8 @@ export interface RollRecord {
   mode: RollMode;
   /** Epoch milliseconds. */
   at: number;
+  /** Set when the roll was a nudge that replaced the day's roll. */
+  nudge?: true;
 }
 
 /** The first roll of a day: the one that counts as that day's motivation. */
@@ -45,6 +47,8 @@ export interface DayRoll {
   value: number;
   sides: DieSides;
   mode: RollMode;
+  /** The roll a nudge replaced. */
+  nudgedFrom?: { value: number; sides: DieSides };
 }
 
 /** counts[sides][face - 1] is how many times that face was the kept roll on that die. */
@@ -56,6 +60,15 @@ export interface Streak {
   best: number;
   /** Local calendar date of the most recent roll, YYYY-MM-DD. */
   lastDate: string | null;
+}
+
+export interface Nudges {
+  /** The week (see `weekKey`) of the last nudge; one is allowed per week. */
+  lastWeek: string | null;
+  used: number;
+  /** Nudges that landed higher, or lower, than the roll they replaced. */
+  better: number;
+  worse: number;
 }
 
 export interface Stats {
@@ -71,6 +84,7 @@ export interface Stats {
   /** Each day's first roll, newest first. */
   days: DayRoll[];
   streak: Streak;
+  nudges: Nudges;
 }
 
 export interface DieSummary {
@@ -98,6 +112,7 @@ export function emptyStats(): Stats {
     history: [],
     days: [],
     streak: {current: 0, best: 0, lastDate: null},
+    nudges: {lastWeek: null, used: 0, better: 0, worse: 0},
   };
 }
 
@@ -117,6 +132,20 @@ export function addDays(dateKey: string, days: number): string {
   const date = dateFromKey(dateKey);
   date.setDate(date.getDate() + days);
   return localDateKey(date);
+}
+
+/** Weeks start on Sunday: this is the date of the Sunday on or before `now`. */
+export function weekKey(now: Date): string {
+  return localDateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()));
+}
+
+export function nudgeUsedThisWeek(stats: Stats, now: Date = new Date()): boolean {
+  return stats.nudges.lastWeek === weekKey(now);
+}
+
+/** Where a roll sits between 0 (a 1) and 1 (the top face), so rolls on different dice compare. */
+function rollScore(value: number, sides: DieSides): number {
+  return (value - 1) / (sides - 1);
 }
 
 /**
@@ -187,8 +216,9 @@ const isFace = (n: unknown, sides: DieSides): n is number => Number.isInteger(n)
 const isDateKey = (s: unknown): s is string => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 const isMode = (m: unknown): m is RollMode => m === 'normal' || m === 'advantage' || m === 'disadvantage';
 
-function bump(counts: FaceCounts, sides: DieSides, value: number): void {
-  (counts[sides] ??= new Array(sides).fill(0))[value - 1]++;
+function bump(counts: FaceCounts, sides: DieSides, value: number, by = 1): void {
+  const faces = counts[sides] ??= new Array(sides).fill(0);
+  faces[value - 1] = Math.max(0, faces[value - 1] + by);
 }
 
 function sanitizeFaces(raw: unknown, sides: DieSides): number[] {
@@ -226,12 +256,39 @@ function sanitizeRoll(raw: unknown): (Roll & Record<string, unknown>) | null {
 
 function sanitizeRecord(raw: unknown): RollRecord | null {
   const r = sanitizeRoll(raw);
-  return r && isCount(r['at']) ? {value: r.value, sides: r.sides, mode: r.mode, at: r['at']} : null;
+  if (!r || !isCount(r['at'])) {
+    return null;
+  }
+  const record: RollRecord = {value: r.value, sides: r.sides, mode: r.mode, at: r['at']};
+  if (r['nudge'] === true) {
+    record.nudge = true;
+  }
+  return record;
 }
 
 function sanitizeDay(raw: unknown): DayRoll | null {
   const r = sanitizeRoll(raw);
-  return r && isDateKey(r['date']) ? {date: r['date'], value: r.value, sides: r.sides, mode: r.mode} : null;
+  if (!r || !isDateKey(r['date'])) {
+    return null;
+  }
+  const day: DayRoll = {date: r['date'], value: r.value, sides: r.sides, mode: r.mode};
+  const from = r['nudgedFrom'] as Partial<DayRoll> | undefined;
+  if (from && isDieSides(from.sides) && isFace(from.value, from.sides)) {
+    day.nudgedFrom = {value: from.value, sides: from.sides};
+  }
+  return day;
+}
+
+function sanitizeNudges(raw: unknown): Nudges {
+  const n = (raw && typeof raw === 'object' ? raw : {}) as Partial<Nudges>;
+  const count = (v: unknown) => isCount(v) ? Math.floor(v) : 0;
+  const used = count(n.used);
+  return {
+    lastWeek: isDateKey(n.lastWeek) ? n.lastWeek : null,
+    used,
+    better: Math.min(used, count(n.better)),
+    worse: Math.min(used, count(n.worse)),
+  };
 }
 
 /** For version 1 data: each day's earliest roll still in history, plus the stored "today". */
@@ -287,6 +344,7 @@ export function sanitize(raw: unknown): Stats {
       ...stats.history.map(h => localDateKey(new Date(h.at))),
     ]);
   }
+  stats.nudges = sanitizeNudges(r['nudges']);
   return stats;
 }
 
@@ -339,6 +397,41 @@ export class StatsService {
       streak.best = Math.max(streak.best, streak.current);
       streak.lastDate = date;
     }
+    this.save(stats);
+    return stats;
+  }
+
+  /**
+   * Replaces today's roll with a new one, once a week. The nudge counts as a roll
+   * like any other; the daily stats swap the old roll for the new one.
+   */
+  nudge(value: number, sides: DieSides, mode: RollMode, now: Date = new Date()): Stats {
+    if (!isDieSides(sides) || !isFace(value, sides)) {
+      throw new Error(`Not a d${sides} value: ${value}`);
+    }
+    const stats = this.load();
+    const today = todayRoll(stats, now);
+    if (!today || nudgeUsedThisWeek(stats, now)) {
+      throw new Error('No nudge available');
+    }
+    stats.lifetimeRolls++;
+    bump(stats.counts, sides, value);
+    stats.history = [{value, sides, mode, at: now.getTime(), nudge: true as const}, ...stats.history].slice(0, HISTORY_LIMIT);
+
+    bump(stats.dailyCounts, today.sides, today.value, -1);
+    bump(stats.dailyCounts, sides, value);
+    stats.days[stats.days.indexOf(today)] = {
+      date: today.date, value, sides, mode, nudgedFrom: {value: today.value, sides: today.sides},
+    };
+
+    const change = rollScore(value, sides) - rollScore(today.value, today.sides);
+    const {nudges} = stats;
+    stats.nudges = {
+      lastWeek: weekKey(now),
+      used: nudges.used + 1,
+      better: nudges.better + (change > 0 ? 1 : 0),
+      worse: nudges.worse + (change < 0 ? 1 : 0),
+    };
     this.save(stats);
     return stats;
   }

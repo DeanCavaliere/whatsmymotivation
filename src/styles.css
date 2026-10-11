@@ -1,15 +1,24 @@
+/* Darcula-style chrome around the table. */
 :root {
-  --ink: #f3ead8;
-  --ink-muted: #b9ae98;
-  --surface: #17110c;
-  --surface-raised: #241a12;
-  --line: rgba(243, 234, 216, 0.14);
+  --ink: #dfe1e5;
+  --ink-muted: #a9adb3;
+  --surface: #2b2b2b;
+  --surface-raised: #3c3f41;
+  --line: rgba(255, 255, 255, 0.13);
+  --hover: rgba(255, 255, 255, 0.07);
   /* Table theme; overridden at runtime from prefs.service.ts. */
   --felt: #10422f;
   --chalk: rgba(150, 230, 210, 0.42);
-  --accent: #e7a33e;
-  --accent-ink: #1d1206;
-  --danger: #ff8a7a;
+  /* Selection, focus and links. */
+  --accent: #589df6;
+  --accent-soft: rgba(88, 157, 246, 0.16);
+  /* Filled buttons and switches; white text on it passes 4.5:1. */
+  --accent-strong: #3574b0;
+  --accent-strong-hover: #3f82c4;
+  --accent-ink: #ffffff;
+  /* Streak callouts. */
+  --highlight: #ffc66d;
+  --danger: #ff8a80;
 
   /* Result tiers, tuned to read on the felt and on the dark dialog. */
   --tier-crit-fail: #ff6b6b;
@@ -94,12 +103,12 @@ app-root {
 }
 
 .btn-primary {
-  background: var(--accent);
+  background: var(--accent-strong);
   color: var(--accent-ink);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #f2b65a;
+  background: var(--accent-strong-hover);
 }
 
 .btn-ghost {
@@ -109,13 +118,13 @@ app-root {
 }
 
 .btn-ghost:hover:not(:disabled) {
-  background: rgba(243, 234, 216, 0.08);
+  background: var(--hover);
 }
 
 .btn-danger {
   background: transparent;
   color: var(--danger);
-  border-color: rgba(255, 138, 122, 0.4);
+  border-color: rgba(255, 138, 128, 0.4);
 }
 
 .visually-hidden {

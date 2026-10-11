@@ -57,9 +57,11 @@ export interface Prefs {
   /** Dice color id. */
   dice: string;
   sides: DieSides;
+  /** Show the once-a-week "Nudge the table" re-roll. */
+  nudge: boolean;
 }
 
-export const DEFAULT_PREFS: Prefs = {table: 'classic', dice: 'gold', sides: 20};
+export const DEFAULT_PREFS: Prefs = {table: 'classic', dice: 'gold', sides: 20, nudge: true};
 
 export function tableTheme(id: string): TableTheme {
   return TABLE_THEMES.find(t => t.id === id) ?? TABLE_THEMES[0];
@@ -90,6 +92,7 @@ export class PrefsService {
         table: TABLE_THEMES.some(t => t.id === table) ? table as string : DEFAULT_PREFS.table,
         dice: DICE_COLORS.some(d => d.id === dice) ? dice as string : DEFAULT_PREFS.dice,
         sides: isDieSides(sides) ? sides : DEFAULT_PREFS.sides,
+        nudge: typeof raw?.['nudge'] === 'boolean' ? raw['nudge'] as boolean : DEFAULT_PREFS.nudge,
       };
     } catch {
       return {...DEFAULT_PREFS};

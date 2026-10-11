@@ -14,6 +14,7 @@ import {
   DayRoll,
   DieSummary,
   dieSummaries,
+  nudgeUsedThisWeek,
   Stats,
   STATS_KEY,
   StatsService,
@@ -29,6 +30,8 @@ interface RollResult {
   mode: RollMode;
   verdict: Verdict;
   isToday: boolean;
+  /** The roll a nudge replaced. */
+  nudgedFrom: { value: number; sides: DieSides } | null;
   /** Streak length after this roll, when it was today's roll. */
   streak: number;
   newBest: boolean;
@@ -76,7 +79,7 @@ const CHART = {width: 400, height: 120, gap: 2, maxBarWidth: 40};
 export class AppComponent implements AfterViewInit, OnDestroy {
   @ViewChild('diceBox', {static: true}) diceBoxRef!: ElementRef<HTMLElement>;
   @ViewChild('statsDialog', {static: true}) statsDialogRef!: ElementRef<HTMLDialogElement>;
-  @ViewChild('customizeDialog', {static: true}) customizeDialogRef!: ElementRef<HTMLDialogElement>;
+  @ViewChild('settingsDialog', {static: true}) settingsDialogRef!: ElementRef<HTMLDialogElement>;
 
   readonly modes: { value: RollMode, label: string, hint: string }[] = [
     {value: 'disadvantage', label: 'Disadv.', hint: 'Roll two dice, keep the lower'},
@@ -88,6 +91,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly diceColors = DICE_COLORS;
   readonly dieOptions = DIE_OPTIONS.map(d => ({...d, odds: dieOdds(d.sides)}));
   readonly dateFromKey = dateFromKey;
+  readonly diceColorOf = diceColor;
+  readonly tableThemeOf = tableTheme;
 
   ready = false;
   rolling = false;
@@ -99,6 +104,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   today: DayRoll | null = null;
   streak = 0;
   streakAtRisk = false;
+  nudgeUsed = false;
+  /** Briefly true while the table shakes for a nudge. */
+  tableNudged = false;
   sessionRolls = 0;
   statsTab: StatsTab = 'daily';
   /** The die picked in the stats dialog, when rolls span more than one. */
@@ -111,6 +119,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   toast = '';
   private installPrompt: BeforeInstallPromptEvent | null = null;
   private toastTimer?: ReturnType<typeof setTimeout>;
+  private shakeTimer?: ReturnType<typeof setTimeout>;
 
   constructor(private dice: DiceService,
               private statsService: StatsService,
@@ -134,6 +143,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         mode: today.mode,
         verdict: verdictFor(today.value, today.sides),
         isToday: true,
+        nudgedFrom: today.nudgedFrom ?? null,
         streak: this.streak,
         newBest: false,
       };
@@ -146,6 +156,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     clearTimeout(this.toastTimer);
+    clearTimeout(this.shakeTimer);
   }
 
   @HostListener('window:keydown', ['$event'])
@@ -203,7 +214,26 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  async roll(): Promise<void> {
+  roll(): Promise<void> {
+    return this.throwDice(false);
+  }
+
+  /** Once a week, shake the table and re-roll today's roll. */
+  nudge(): Promise<void> {
+    if (!this.canNudge) {
+      return Promise.resolve();
+    }
+    this.tableNudged = true;
+    clearTimeout(this.shakeTimer);
+    this.shakeTimer = setTimeout(() => this.tableNudged = false, 500);
+    return this.throwDice(true);
+  }
+
+  get canNudge(): boolean {
+    return this.prefs.nudge && !!this.today && !this.nudgeUsed;
+  }
+
+  private async throwDice(nudge: boolean): Promise<void> {
     if (!this.ready || this.rolling) {
       return;
     }
@@ -214,9 +244,17 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     try {
       const values = await this.dice.roll(mode, sides, diceColor(this.prefs.dice).color);
       const value = keptValue(values, mode);
-      const hadToday = !!todayRoll(this.stats);
+      const before = todayRoll(this.stats);
       const previousBest = this.stats.streak.best;
-      this.stats = this.statsService.record(value, sides, mode);
+      try {
+        this.stats = nudge ? this.statsService.nudge(value, sides, mode) : this.statsService.record(value, sides, mode);
+      } catch {
+        // Another tab used this week's nudge (or rolled over midnight) while the dice were in the air.
+        this.stats = this.statsService.load();
+        this.refreshDerived();
+        this.showToast('That nudge was already used this week.');
+        return;
+      }
       this.sessionRolls++;
       this.refreshDerived();
 
@@ -227,9 +265,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         dropped: values.length > 1 ? values.find((v, i) => i !== values.indexOf(value)) ?? null : null,
         mode,
         verdict,
-        isToday: !hadToday,
+        isToday: nudge || !before,
+        nudgedFrom: nudge && before ? {value: before.value, sides: before.sides} : null,
         streak: this.streak,
-        newBest: !hadToday && this.streak > 1 && this.streak > previousBest,
+        newBest: !nudge && !before && this.streak > 1 && this.streak > previousBest,
       };
       if (verdict.celebration) {
         this.confetti.trigger(verdict.celebration);
@@ -262,6 +301,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   resultLabel(result: RollResult): string {
     return [
       result.isToday ? 'Today\'s roll' : 'Re-roll',
+      result.nudgedFrom ? 'nudged' : '',
       result.sides === 20 ? '' : `d${result.sides}`,
       result.mode === 'normal' ? '' : result.mode,
     ].filter(Boolean).join(' · ');
@@ -316,8 +356,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.refreshStatsView();
   }
 
-  openCustomize(): void {
-    this.customizeDialogRef.nativeElement.showModal();
+  openSettings(): void {
+    this.settingsDialogRef.nativeElement.showModal();
   }
 
   /** Clicks on the backdrop land on the dialog element itself. */
@@ -340,6 +380,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   setSides(sides: DieSides): void {
     this.prefs = {...this.prefs, sides};
+    this.prefsService.save(this.prefs);
+  }
+
+  setNudge(nudge: boolean): void {
+    this.prefs = {...this.prefs, nudge};
     this.prefsService.save(this.prefs);
   }
 
@@ -373,6 +418,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.today = todayRoll(this.stats);
     this.streak = activeStreak(this.stats);
     this.streakAtRisk = streakAtRisk(this.stats);
+    this.nudgeUsed = nudgeUsedThisWeek(this.stats);
     this.refreshStatsView();
   }
 

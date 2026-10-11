@@ -35,17 +35,17 @@
         aria-label="Stats" title="Stats">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M12 20V4M19 20v-6"/></svg>
       </button>
-      <button type="button" class="btn btn-ghost btn-icon" (click)="openCustomize()" aria-haspopup="dialog"
-        aria-label="Customize" title="Customize">
+      <button type="button" class="btn btn-ghost btn-icon" (click)="openSettings()" aria-haspopup="dialog"
+        aria-label="Settings" title="Settings">
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.7-1.7H17a4 4 0 0 0 4-4c0-4.4-4-8.2-9-8.2Z"/>
-          <circle cx="7.5" cy="11.5" r="1.2"/><circle cx="10.5" cy="7.5" r="1.2"/><circle cx="15" cy="8" r="1.2"/>
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M21.37 10.44L21.37 13.56L18.79 13.69L18.00 15.61L19.73 17.52L17.52 19.73L15.61 18.00L13.69 18.79L13.56 21.37L10.44 21.37L10.31 18.79L8.39 18.00L6.48 19.73L4.27 17.52L6.00 15.61L5.21 13.69L2.63 13.56L2.63 10.44L5.21 10.31L6.00 8.39L4.27 6.48L6.48 4.27L8.39 6.00L10.31 5.21L10.44 2.63L13.56 2.63L13.69 5.21L15.61 6.00L17.52 4.27L19.73 6.48L18.00 8.39L18.79 10.31Z"/>
         </svg>
       </button>
     </div>
   </header>
 
-  <main class="table" (click)="onTableClick($event)">
+  <main class="table" [class.is-nudged]="tableNudged" (click)="onTableClick($event)">
     <svg class="table-text" [class.is-dimmed]="result" viewBox="0 0 1000 1000" aria-hidden="true">
       <defs>
         <path id="arc-top" d="M 190 500 A 310 310 0 0 1 810 500"/>
@@ -63,11 +63,20 @@
         @if (r.dropped !== null) {
           <div class="result-dropped">dropped {{ r.dropped }}</div>
         }
+        @if (r.nudgedFrom; as from) {
+          <div class="result-sub">was {{ from.value }}{{ from.sides === r.sides ? '' : ' on d' + from.sides }}</div>
+        }
         <p class="result-message">{{ r.verdict.message }}</p>
         @if (r.isToday && r.streak > 1) {
           <p class="result-streak">{{ r.streak }}-day streak{{ r.newBest ? ' · new best!' : '' }}</p>
         }
-        <button type="button" class="btn btn-ghost btn-small" (click)="share()">Share</button>
+        <div class="result-actions">
+          <button type="button" class="btn btn-ghost btn-small" (click)="share()">Share</button>
+          @if (r.isToday && canNudge) {
+            <button type="button" class="btn btn-ghost btn-small" (click)="nudge()"
+              title="Re-roll today's roll. You get one nudge a week, and it comes back every Sunday.">Nudge the table</button>
+          }
+        </div>
       }
       @if (!ready) {
         <p class="result-status">Setting up the table…</p>
@@ -197,14 +206,37 @@
           <ol class="history">
             @for (d of stats.days; track d.date) {
               <li [attr.data-tier]="tierOf(d.value, d.sides)"
-                [title]="(dateFromKey(d.date) | date:'fullDate') + (d.mode === 'normal' ? '' : ' · ' + d.mode)">
+                [title]="(dateFromKey(d.date) | date:'fullDate') + (d.mode === 'normal' ? '' : ' · ' + d.mode)
+                  + (d.nudgedFrom ? ' · nudged from ' + d.nudgedFrom.value : '')">
                 <span>{{ d.value }}</span>
-                <span class="history-date">{{ dateFromKey(d.date) | date:'MMM d' }}{{ d.sides === 20 ? '' : ' · d' + d.sides }}</span>
+                <span class="history-date">{{ dateFromKey(d.date) | date:'MMM d' }}{{ d.sides === 20 ? '' : ' · d' + d.sides }}{{ d.nudgedFrom ? ' ↻' : '' }}</span>
               </li>
             }
           </ol>
         } @else {
           <p class="empty">No daily rolls yet. Your first roll each day shows up here.</p>
+        }
+
+        @if (prefs.nudge || stats.nudges.used) {
+          <h3>Nudges</h3>
+          <dl class="tiles">
+            <div>
+              <dt>Used</dt>
+              <dd>{{ stats.nudges.used }}</dd>
+            </div>
+            <div title="Landed higher than the roll it replaced">
+              <dt>Helped</dt>
+              <dd>{{ stats.nudges.better }}</dd>
+            </div>
+            <div title="Landed lower than the roll it replaced">
+              <dt>Backfired</dt>
+              <dd>{{ stats.nudges.worse }}</dd>
+            </div>
+            <div>
+              <dt>Next nudge</dt>
+              <dd class="tile-text">{{ nudgeUsed ? 'Sunday' : 'Ready' }}</dd>
+            </div>
+          </dl>
         }
       } @else {
         @if (stats.history.length) {
@@ -212,7 +244,7 @@
           <ol class="history">
             @for (h of stats.history; track $index) {
               <li [attr.data-tier]="tierOf(h.value, h.sides)"
-                [title]="(h.at | date:'medium') + (h.mode === 'normal' ? '' : ' · ' + h.mode)">
+                [title]="(h.at | date:'medium') + (h.mode === 'normal' ? '' : ' · ' + h.mode) + (h.nudge ? ' · nudge' : '')">
                 <span>{{ h.value }}</span>
                 @if (h.sides !== 20) {
                   <span class="history-date">d{{ h.sides }}</span>
@@ -234,53 +266,94 @@
   </div>
 </dialog>
 
-<dialog #customizeDialog class="panel" aria-labelledby="customize-title" (click)="onDialogClick($event)">
+<dialog #settingsDialog class="panel" aria-labelledby="settings-title" (click)="onDialogClick($event)">
   <div class="panel-body">
     <header class="panel-header">
-      <h2 id="customize-title">Customize</h2>
-      <button type="button" class="btn btn-ghost btn-small" (click)="customizeDialog.close()" aria-label="Close">✕</button>
+      <h2 id="settings-title">Settings</h2>
+      <button type="button" class="btn btn-ghost btn-small" (click)="settingsDialog.close()" aria-label="Close">✕</button>
     </header>
 
-    <fieldset class="die-options">
-      <legend>Die</legend>
-      <div class="die-row die-head" aria-hidden="true">
-        <span></span><span>Crit</span><span>Good day</span><span>Bad day</span>
-      </div>
-      @for (d of dieOptions; track d.sides) {
-        <label class="die-row">
-          <input type="radio" name="sides" [value]="d.sides" [checked]="prefs.sides === d.sides" (change)="setSides(d.sides)">
-          <span class="die-name"><strong>d{{ d.sides }}</strong> <small>{{ d.blurb }}</small></span>
-          <span><span class="visually-hidden">Crit: </span>1 in {{ d.sides }}</span>
-          <span><span class="visually-hidden">Good day: </span>{{ d.odds.good | percent }}</span>
-          <span><span class="visually-hidden">Bad day: </span>{{ d.odds.bad | percent }}</span>
-        </label>
-      }
-    </fieldset>
-    <p class="panel-note">Every die crits on its top face and fails on a 1. A good day is like a 12 or better
-      on the d20, a bad day 5 or lower. Odds are for a normal roll; advantage and disadvantage tilt them.</p>
+    <div class="settings-list">
+      <details class="accordion" name="settings">
+        <summary>
+          <span class="accordion-title">Die</span>
+          <span class="accordion-value">d{{ prefs.sides }}</span>
+        </summary>
+        <div class="accordion-body">
+          <fieldset class="die-options">
+            <legend class="visually-hidden">Die</legend>
+            <div class="die-row die-head" aria-hidden="true">
+              <span></span><span>Crit</span><span>Good day</span><span>Bad day</span>
+            </div>
+            @for (d of dieOptions; track d.sides) {
+              <label class="die-row">
+                <input type="radio" name="sides" [value]="d.sides" [checked]="prefs.sides === d.sides" (change)="setSides(d.sides)">
+                <span class="die-name"><strong>d{{ d.sides }}</strong> <small>{{ d.blurb }}</small></span>
+                <span><span class="visually-hidden">Crit: </span>1 in {{ d.sides }}</span>
+                <span><span class="visually-hidden">Good day: </span>{{ d.odds.good | percent }}</span>
+                <span><span class="visually-hidden">Bad day: </span>{{ d.odds.bad | percent }}</span>
+              </label>
+            }
+          </fieldset>
+          <p class="panel-note">Every die crits on its top face and fails on a 1. A good day is like a 12 or better
+            on the d20, a bad day 5 or lower. Odds are for a normal roll; advantage and disadvantage tilt them.</p>
+        </div>
+      </details>
 
-    <fieldset class="swatches">
-      <legend>Dice color</legend>
-      @for (d of diceColors; track d.id) {
-        <label class="swatch">
-          <input type="radio" name="dice" [value]="d.id" [checked]="prefs.dice === d.id" (change)="setDice(d.id)">
-          <span class="swatch-chip swatch-die" [style.--chip]="d.color"></span>
-          {{ d.label }}
-        </label>
-      }
-    </fieldset>
-    <p class="panel-note">Your next roll uses the new die and color.</p>
+      <details class="accordion" name="settings">
+        <summary>
+          <span class="accordion-title">Dice color</span>
+          <span class="accordion-value">
+            <span class="swatch-chip swatch-die" [style.--chip]="diceColorOf(prefs.dice).color"></span>
+            {{ diceColorOf(prefs.dice).label }}
+          </span>
+        </summary>
+        <div class="accordion-body">
+          <fieldset class="swatches">
+            <legend class="visually-hidden">Dice color</legend>
+            @for (d of diceColors; track d.id) {
+              <label class="swatch">
+                <input type="radio" name="dice" [value]="d.id" [checked]="prefs.dice === d.id" (change)="setDice(d.id)">
+                <span class="swatch-chip swatch-die" [style.--chip]="d.color"></span>
+                {{ d.label }}
+              </label>
+            }
+          </fieldset>
+          <p class="panel-note">The new color shows up on your next roll.</p>
+        </div>
+      </details>
 
-    <fieldset class="swatches">
-      <legend>Table</legend>
-      @for (t of tableThemes; track t.id) {
-        <label class="swatch">
-          <input type="radio" name="table" [value]="t.id" [checked]="prefs.table === t.id" (change)="setTable(t.id)">
-          <span class="swatch-chip swatch-felt" [style.--chip]="t.felt"></span>
-          {{ t.label }}
-        </label>
-      }
-    </fieldset>
+      <details class="accordion" name="settings">
+        <summary>
+          <span class="accordion-title">Table color</span>
+          <span class="accordion-value">
+            <span class="swatch-chip swatch-felt" [style.--chip]="tableThemeOf(prefs.table).felt"></span>
+            {{ tableThemeOf(prefs.table).label }}
+          </span>
+        </summary>
+        <div class="accordion-body">
+          <fieldset class="swatches">
+            <legend class="visually-hidden">Table color</legend>
+            @for (t of tableThemes; track t.id) {
+              <label class="swatch">
+                <input type="radio" name="table" [value]="t.id" [checked]="prefs.table === t.id" (change)="setTable(t.id)">
+                <span class="swatch-chip swatch-felt" [style.--chip]="t.felt"></span>
+                {{ t.label }}
+              </label>
+            }
+          </fieldset>
+        </div>
+      </details>
+
+      <label class="switch-row">
+        <span class="switch-text">
+          <strong>Nudge the table</strong>
+          <small>Once a week, shake the table to re-roll today's roll. Your nudge comes back every Sunday.</small>
+        </span>
+        <input #nudgeSwitch class="switch" type="checkbox" role="switch" [checked]="prefs.nudge"
+          (change)="setNudge(nudgeSwitch.checked)">
+      </label>
+    </div>
 
     @if (install) {
       <h3>App</h3>

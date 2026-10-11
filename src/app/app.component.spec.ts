@@ -114,7 +114,7 @@ describe('AppComponent', () => {
 
       expect(dice.lastColor).toBe('#b3262d');
       expect(document.documentElement.style.getPropertyValue('--felt')).toBe('#143a66');
-      expect(JSON.parse(store.get('wmm.prefs.v1')!)).toEqual({table: 'royal', dice: 'ruby', sides: 20});
+      expect(JSON.parse(store.get('wmm.prefs.v1')!)).toMatchObject({table: 'royal', dice: 'ruby', sides: 20});
     });
 
     it('rolls the chosen die and labels the result with it', async () => {
@@ -128,6 +128,33 @@ describe('AppComponent', () => {
       expect(app.result?.verdict.tier).toBe('crit-success');
       expect(fixture.nativeElement.querySelector('.result-label').textContent).toContain('d6');
       expect(app.stats.counts[6]).toEqual([0, 0, 0, 0, 0, 1]);
+    });
+
+    it('nudges the table once a week to replace today\'s roll', async () => {
+      dice.next = [3];
+      await app.roll();
+      fixture.detectChanges();
+      const nudgeButton = () => [...fixture.nativeElement.querySelectorAll('.result-actions button')]
+        .find((b: HTMLButtonElement) => b.textContent!.includes('Nudge')) as HTMLButtonElement | undefined;
+
+      dice.next = [17];
+      nudgeButton()!.click();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(app.today?.value).toBe(17);
+      expect(app.result?.nudgedFrom?.value).toBe(3);
+      expect(fixture.nativeElement.querySelector('.result-label').textContent).toContain('nudged');
+      expect(fixture.nativeElement.querySelector('.result-sub').textContent).toContain('was 3');
+      expect(nudgeButton()).toBeUndefined();
+    });
+
+    it('hides the nudge when it is switched off', async () => {
+      (fixture.nativeElement.querySelector('.switch') as HTMLInputElement).click();
+      await app.roll();
+      fixture.detectChanges();
+      expect(app.prefs.nudge).toBe(false);
+      expect(fixture.nativeElement.querySelector('.result-actions').textContent).not.toContain('Nudge');
     });
 
     it('shows daily and all-roll stats on separate tabs', async () => {

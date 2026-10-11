@@ -8,6 +8,7 @@ import {
   KeyValueStorage,
   LEGACY_LIFETIME_KEY,
   localDateKey,
+  nudgeUsedThisWeek,
   sanitize,
   STATS_KEY,
   STATS_V1_KEY,
@@ -15,6 +16,7 @@ import {
   streakAtRisk,
   streakFromDates,
   todayRoll,
+  weekKey,
 } from './stats.service';
 
 class MemoryStorage implements KeyValueStorage {
@@ -205,6 +207,49 @@ describe('StatsService', () => {
     ]);
     expect(countTotals(stats.counts)).toEqual({rolls: 7, crits: 4, critFails: 2});
     expect(dieSummaries(sanitize(null).counts)).toEqual([]);
+  });
+
+  describe('nudges', () => {
+    // 2026-10-10 is a Saturday; the 11th is the next Sunday.
+    it('starts each week on Sunday', () => {
+      expect(weekKey(day(10))).toBe('2026-10-04');
+      expect(weekKey(day(11))).toBe('2026-10-11');
+      expect(weekKey(day(17, 23))).toBe('2026-10-11');
+    });
+
+    it('replaces today\'s roll and keeps what it replaced', () => {
+      service.record(4, 20, 'normal', morning);
+      const stats = service.nudge(15, 20, 'normal', evening);
+
+      expect(todayRoll(stats, evening)).toEqual({
+        date: '2026-10-10', value: 15, sides: 20, mode: 'normal', nudgedFrom: {value: 4, sides: 20},
+      });
+      expect(stats.dailyCounts[20]![3]).toBe(0);
+      expect(stats.dailyCounts[20]![14]).toBe(1);
+      // It's still a roll, so it counts towards every-roll stats.
+      expect(stats.lifetimeRolls).toBe(2);
+      expect(stats.history[0]).toMatchObject({value: 15, nudge: true});
+      expect(stats.nudges).toEqual({lastWeek: '2026-10-04', used: 1, better: 1, worse: 0});
+    });
+
+    it('allows one a week, back on Sunday', () => {
+      service.record(4, 20, 'normal', day(9));
+      service.nudge(2, 20, 'normal', day(9));
+      expect(nudgeUsedThisWeek(service.load(), day(10))).toBe(true);
+      service.record(6, 20, 'normal', day(10));
+      expect(() => service.nudge(9, 20, 'normal', day(10))).toThrowError();
+
+      service.record(6, 20, 'normal', day(11));
+      expect(nudgeUsedThisWeek(service.load(), day(11))).toBe(false);
+      const stats = service.nudge(3, 4, 'normal', day(11));
+      // A 3 on a d4 beats a 6 on a d20.
+      expect(stats.nudges).toEqual({lastWeek: '2026-10-11', used: 2, better: 1, worse: 1});
+    });
+
+    it('needs a roll today to nudge', () => {
+      service.record(4, 20, 'normal', day(9));
+      expect(() => service.nudge(9, 20, 'normal', day(10))).toThrowError();
+    });
   });
 
   describe('streaks', () => {
