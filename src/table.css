@@ -1,0 +1,175 @@
+/* Things drawn on the felt that live outside the component, to keep app.component.css under its size budget. */
+
+.doodles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 300ms ease;
+}
+
+.doodle {
+  position: absolute;
+  width: calc(var(--size) * clamp(56px, 22cqmin, 150px));
+  aspect-ratio: 1;
+  overflow: visible;
+  fill: none;
+  stroke: var(--chalk);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.75;
+}
+
+.doodle .is-filled {
+  fill: var(--chalk);
+  stroke: none;
+}
+
+/* Positive nudges move a doodle toward the middle of the table. */
+.doodle[data-corner="top-left"] { top: 3%; left: 3%; translate: var(--dx) var(--dy); }
+.doodle[data-corner="top-right"] { top: 3%; right: 3%; translate: calc(-1 * var(--dx)) var(--dy); }
+.doodle[data-corner="bottom-left"] { bottom: 3%; left: 3%; translate: var(--dx) calc(-1 * var(--dy)); }
+.doodle[data-corner="bottom-right"] { bottom: 3%; right: 3%; translate: calc(-1 * var(--dx)) calc(-1 * var(--dy)); }
+
+.doodle {
+  rotate: var(--rotate);
+}
+
+/* ---------- Daily quest, under the result ---------- */
+
+.quest {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  max-width: 19em;
+  margin-top: 10px;
+  pointer-events: auto;
+}
+
+.quest-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.quest-check {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin: 1px 0 0;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  appearance: none;
+  cursor: pointer;
+}
+
+.quest-check:checked::after {
+  content: "✓";
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.quest-check:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.quest-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
+}
+
+.quest-text small {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.quest.is-done .quest-text span {
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+}
+
+.quest-note {
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-style: italic;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+  cursor: text;
+}
+
+.quest-note:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.quest-form {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+}
+
+.quest-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+/* ---------- Share and Reroll: words on wide tables, icons on narrow ones ---------- */
+
+.result-glyph {
+  display: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@container (max-width: 480px) {
+  .result-action {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+  }
+
+  .result-glyph {
+    display: block;
+  }
+
+  /* Hidden but still read out, like .visually-hidden. */
+  .result-action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

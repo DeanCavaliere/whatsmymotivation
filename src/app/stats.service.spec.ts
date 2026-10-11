@@ -84,7 +84,7 @@ describe('StatsService', () => {
     expect(countTotals(stats.dailyCounts).rolls).toBe(1);
 
     const nextDay = service.record(3, 4, 'advantage', tomorrow);
-    expect(todayRoll(nextDay, tomorrow)).toEqual({date: localDateKey(tomorrow), value: 3, sides: 4, mode: 'advantage'});
+    expect(todayRoll(nextDay, tomorrow)).toMatchObject({date: localDateKey(tomorrow), value: 3, sides: 4, mode: 'advantage'});
     expect(nextDay.days.map(d => d.value)).toEqual([3, 13]);
     expect(nextDay.dailyCounts).toEqual({20: faces(20, {13: 1}), 4: faces(4, {3: 1})});
   });
@@ -174,7 +174,7 @@ describe('StatsService', () => {
       service.record(4, 20, 'normal', morning);
       const stats = service.reroll(15, 20, 'normal', evening);
 
-      expect(todayRoll(stats, evening)).toEqual({
+      expect(todayRoll(stats, evening)).toMatchObject({
         date: '2026-10-10', value: 15, sides: 20, mode: 'normal', rerolledFrom: {value: 4, sides: 20},
       });
       expect(stats.dailyCounts[20]![3]).toBe(0);
@@ -227,6 +227,36 @@ describe('StatsService', () => {
       expect(inspirationReasons(20, 20, 14, false)).toEqual(['natural']);
       expect(inspirationReasons(6, 6, 3, true)).toEqual(['natural']);
       expect(inspirationReasons(12, 20, 6, true)).toEqual([]);
+    });
+  });
+
+  describe('quests and notes', () => {
+    it('gives the day\'s roll a quest sized to it', () => {
+      const stats = service.record(3, 20, 'normal', morning, 'clear', () => 0);
+      expect(todayRoll(stats, morning)!.quest).toEqual({id: 'one-email', done: false});
+      // Practice rolls don't change it.
+      expect(todayRoll(service.record(20, 20, 'normal', evening, 'clear', () => 0), evening)!.quest!.id).toBe('one-email');
+    });
+
+    it('brings a new quest with a reroll, and keeps the note', () => {
+      service.record(3, 20, 'normal', morning, 'clear', () => 0);
+      service.setQuestDone('2026-10-10', true);
+      service.setNote('2026-10-10', 'Inbox zero');
+      const stats = service.reroll(18, 20, 'normal', evening, 'clear', () => 0);
+      expect(todayRoll(stats, evening)).toMatchObject({quest: {id: 'avoided-task', done: false}, note: 'Inbox zero'});
+    });
+
+    it('ticks quests and saves notes, trimmed to 80 characters', () => {
+      service.record(12, 20, 'normal', morning);
+      expect(todayRoll(service.setQuestDone('2026-10-10', true), morning)!.quest!.done).toBe(true);
+      expect(todayRoll(service.setNote('2026-10-10', '  ' + 'x'.repeat(100)), morning)!.note).toBe('x'.repeat(80));
+      expect(todayRoll(service.setNote('2026-10-10', '   '), morning)!.note).toBeUndefined();
+    });
+
+    it('drops unknown quests and blank notes from storage', () => {
+      const day = {date: '2026-10-10', value: 5, sides: 20, mode: 'normal'};
+      const stats = sanitize({days: [{...day, quest: {id: 'nope', done: true}, note: '  '}]});
+      expect(stats.days[0]).toEqual(day);
     });
   });
 

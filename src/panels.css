@@ -942,3 +942,36 @@ label.die-row:has(input:focus-visible) {
 .inspiration-meter strong {
   color: var(--ink);
 }
+
+.calendar-quest {
+  position: absolute;
+  bottom: 3px;
+  left: 5px;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.calendar-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: 4px;
+}
+
+.calendar-note label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.calendar-note input {
+  flex: 1;
+  min-width: 10em;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}

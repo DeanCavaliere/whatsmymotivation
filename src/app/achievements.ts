@@ -33,13 +33,19 @@ export interface Badge {
   name: string;
   /** How to earn it, shown whether or not it's earned. */
   description: string;
-  /** Checked after each roll, with the stats already updated. */
-  earned(stats: Stats, roll: RollContext): boolean;
+  /**
+   * Checked after each roll, with the stats already updated, and after a quest or note changes
+   * (with no roll).
+   */
+  earned(stats: Stats, roll: RollContext | null): boolean;
   /** For badges earned by counting up. */
   progress?(stats: Stats): Progress;
 }
 
-const twoDice = (roll: RollContext) => roll.values.length === 2;
+const twoDice = (roll: RollContext | null): roll is RollContext => roll?.values.length === 2;
+const natural = (roll: RollContext | null): roll is RollContext => !!roll && roll.value === roll.sides;
+const questsDone = (stats: Stats) => stats.days.filter(d => d.quest?.done).length;
+const notesWritten = (stats: Stats) => stats.days.filter(d => d.note).length;
 /** Days with a roll that had this condition. */
 const rolledDaysWith = (stats: Stats, condition: DayCondition) => stats.days.filter(d => stats.conditions[d.date] === condition).length;
 
@@ -77,12 +83,12 @@ export const BADGES: readonly Badge[] = [
   {
     id: 'natural', icon: '🌟', name: 'Natural',
     description: 'Roll your die\'s top face.',
-    earned: (_, roll) => roll.value === roll.sides,
+    earned: (_, roll) => natural(roll),
   },
   {
     id: 'rock-bottom', icon: '💀', name: 'Rock bottom',
     description: 'Roll a natural 1.',
-    earned: (_, roll) => roll.value === 1,
+    earned: (_, roll) => roll?.value === 1,
   },
   {
     id: 'snake-eyes', icon: '🐍', name: 'Snake eyes',
@@ -107,7 +113,7 @@ export const BADGES: readonly Badge[] = [
     id: 'comeback', icon: '🔄', name: 'Comeback',
     description: 'A natural 1 one day, then the top face the next.',
     earned: (stats, roll) => {
-      if (!roll.isDayRoll || roll.value !== roll.sides) {
+      if (!natural(roll) || !roll.isDayRoll) {
         return false;
       }
       const yesterday = stats.days.find(d => d.date === addDays(roll.date, -1));
@@ -131,7 +137,7 @@ export const BADGES: readonly Badge[] = [
   {
     id: 'lucky-reroll', icon: '🍀', name: 'Lucky reroll',
     description: 'Reroll a natural 1 into the top face.',
-    earned: (_, roll) => roll.rerolledFrom === 1 && roll.value === roll.sides,
+    earned: (_, roll) => natural(roll) && roll.rerolledFrom === 1,
   },
   {
     id: 'fogwalker', icon: '🌫️', name: 'Fogwalker',
@@ -142,19 +148,31 @@ export const BADGES: readonly Badge[] = [
   {
     id: 'storm-chaser', icon: '⚡', name: 'Storm chaser',
     description: 'Roll your die\'s top face as the day\'s roll on a stormy day.',
-    earned: (_, roll) => roll.isDayRoll && roll.condition === 'stormy' && roll.value === roll.sides,
+    earned: (_, roll) => natural(roll) && roll.isDayRoll && roll.condition === 'stormy',
   },
   {
     id: 'blessed-and-cursed', icon: '☯️', name: 'Blessed and cursed',
     description: 'Have a Blessed day and a Hexed day in the same week.',
     earned: (stats, roll) => {
-      const week = weekOf(roll.date).map(d => stats.conditions[d]);
+      const week = roll ? weekOf(roll.date).map(d => stats.conditions[d]) : [];
       return week.includes('blessed') && week.includes('hexed');
     },
   },
+  {
+    id: 'questmaster', icon: '📜', name: 'Questmaster',
+    description: 'Finish 10 daily quests.',
+    earned: stats => questsDone(stats) >= 10,
+    progress: stats => ({current: Math.min(questsDone(stats), 10), goal: 10, unit: 'quests'}),
+  },
+  {
+    id: 'chronicler', icon: '✍️', name: 'Chronicler',
+    description: 'Write 10 notes about what you got done.',
+    earned: stats => notesWritten(stats) >= 10,
+    progress: stats => ({current: Math.min(notesWritten(stats), 10), goal: 10, unit: 'notes'}),
+  },
 ];
 
-/** Badges this roll earns that weren't earned before. */
-export function newBadges(stats: Stats, roll: RollContext): Badge[] {
+/** Badges this roll (or, with no roll, a quest or note) earns that weren't earned before. */
+export function newBadges(stats: Stats, roll: RollContext | null): Badge[] {
   return BADGES.filter(b => !stats.achievements[b.id] && b.earned(stats, roll));
 }

@@ -131,6 +131,28 @@
         @if (r.isToday && r.streak > 1) {
           <p class="result-streak">{{ r.streak }}-day streak{{ r.newBest ? ' · new best!' : '' }}</p>
         }
+        @if (prefs.quests && r.isToday && today?.quest; as q) {
+          <div class="quest" [class.is-done]="q.done">
+            <label class="quest-line">
+              <input #questCheck type="checkbox" class="quest-check" [checked]="q.done" aria-describedby="quest-text"
+                (change)="setQuestDone(questCheck.checked)">
+              <span class="quest-text" id="quest-text"><small>Today's quest</small><span>{{ questText(q.id) }}</span></span>
+            </label>
+            @if (q.done) {
+              @if (today?.note && !editingNote) {
+                <button type="button" class="quest-note" (click)="editingNote = true" title="Edit your note">
+                  “{{ today?.note }}”<span class="visually-hidden">, edit your note</span>
+                </button>
+              } @else {
+                <form class="quest-form" (submit)="saveNote($event, noteInput.value)">
+                  <input #noteInput id="quest-note" type="text" [maxLength]="noteLimit" [value]="today?.note ?? ''"
+                    placeholder="What did you get done?" aria-label="What did you get done? (optional)">
+                  <button type="submit" class="btn btn-ghost btn-small">Save</button>
+                </form>
+              }
+            }
+          </div>
+        }
         @if (r.badges.length) {
           <p class="result-badge">
             <span class="result-badge-icon" aria-hidden="true">{{ r.badges[0].icon }}</span>
@@ -151,10 +173,15 @@
           </p>
         }
         <div class="result-actions">
-          <button type="button" class="btn btn-ghost btn-small" (click)="share()">Share</button>
+          <!-- On narrow tables these shrink to icons; the words stay for screen readers. -->
+          <button type="button" class="btn btn-ghost btn-small result-action" (click)="share()" title="Share">
+            <svg class="result-glyph" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8M5 5l3-3 3 3M3 9v4h10V9"/></svg>
+            <span class="result-action-label">Share</span>
+          </button>
           @if (r.isToday && canReroll) {
-            <button type="button" class="btn btn-ghost btn-small" (click)="askReroll()" aria-haspopup="dialog">
-              Reroll <span class="result-cost">· 1 <span aria-hidden="true">✦</span><span class="visually-hidden">Inspiration</span></span>
+            <button type="button" class="btn btn-ghost btn-small result-action" (click)="askReroll()" aria-haspopup="dialog" title="Reroll · 1 ✦">
+              <svg class="result-glyph" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.5M13 2v3h-3"/></svg>
+              <span class="result-action-label">Reroll <span class="result-cost">· 1 <span aria-hidden="true">✦</span><span class="visually-hidden">Inspiration</span></span></span>
             </button>
           }
         </div>
@@ -281,6 +308,9 @@
                       } @else if (d.tier === 'crit-fail') {
                         <svg class="calendar-mark calendar-crack" viewBox="0 0 12 12" aria-hidden="true"><path d="M1 2 L5 6 L3.5 7.5 L8 11 M5 6 L9 3.5 L11 4.5"/></svg>
                       }
+                      @if (r.quest?.done) {
+                        <span class="calendar-quest" aria-hidden="true">✓</span>
+                      }
                       @if (r.rerolledFrom) {
                         <span class="calendar-reroll" aria-hidden="true">✦</span>
                       }
@@ -299,6 +329,9 @@
                 <li>★ Natural top face</li>
                 <li><svg class="calendar-crack" viewBox="0 0 12 12"><path d="M1 2 L5 6 L3.5 7.5 L8 11 M5 6 L9 3.5 L11 4.5"/></svg> Natural 1</li>
                 <li>✦ Rerolled</li>
+                @if (prefs.quests) {
+                  <li>✓ Quest done</li>
+                }
               </ul>
               <div class="calendar-details" [attr.data-tier]="calendarRoll ? tierOf(calendarRoll.value, calendarRoll.sides) : null">
                 <h4>{{ dateFromKey(calendarDay) | date:'EEEE, MMMM d' }}</h4>
@@ -306,6 +339,15 @@
                   <p class="calendar-details-roll">Rolled <strong>{{ r.value }}</strong> on the d{{ r.sides }}{{ r.mode === 'normal' ? '' : ' with ' + r.mode }}</p>
                   @if (r.rerolledFrom; as from) {
                     <p>Rerolled from a {{ from.value }}{{ from.sides === r.sides ? '' : ' on the d' + from.sides }}.</p>
+                  }
+                  @if (r.quest; as q) {
+                    <p>Quest: {{ questText(q.id) }}{{ q.done ? ' ✓' : '' }}<span class="visually-hidden">{{ q.done ? ', done' : ', not done' }}</span></p>
+                    <form class="calendar-note" (submit)="saveNote($event, calendarNote.value, r.date)">
+                      <label for="calendar-note-input">Note</label>
+                      <input #calendarNote id="calendar-note-input" type="text" [maxLength]="noteLimit" [value]="r.note ?? ''"
+                        placeholder="What did you get done?">
+                      <button type="submit" class="btn btn-ghost btn-small">Save</button>
+                    </form>
                   }
                 } @else {
                   <p>No roll this day.</p>
@@ -597,6 +639,17 @@
         <input #rerollsSwitch id="rerolls-switch" class="switch" type="checkbox" role="switch" [checked]="prefs.rerolls"
           aria-labelledby="rerolls-label" aria-describedby="rerolls-description"
           (change)="setRerolls(rerollsSwitch.checked)">
+      </label>
+
+      <label class="switch-row" for="quests-switch">
+        <span class="switch-text">
+          <strong id="quests-label">Daily quest</strong>
+          <small id="quests-description">A small task sized to the day's roll, and a line to note what you got done.</small>
+        </span>
+        <span class="switch-state" aria-hidden="true">{{ prefs.quests ? 'On' : 'Off' }}</span>
+        <input #questsSwitch id="quests-switch" class="switch" type="checkbox" role="switch" [checked]="prefs.quests"
+          aria-labelledby="quests-label" aria-describedby="quests-description"
+          (change)="setQuests(questsSwitch.checked)">
       </label>
 
       <label class="switch-row" for="sound-switch">

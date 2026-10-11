@@ -299,7 +299,7 @@ describe('AppComponent', () => {
       app.setStatsTab('badges');
       fixture.detectChanges();
       const el: HTMLElement = fixture.nativeElement;
-      expect(el.querySelector('.badge-count')!.textContent!.replace(/\s+/g, ' ')).toContain('3 of 18 badges earned');
+      expect(el.querySelector('.badge-count')!.textContent!.replace(/\s+/g, ' ')).toContain('3 of 20 badges earned');
       expect(el.querySelectorAll('.badge:not(.is-locked)').length).toBe(3);
       expect(el.querySelector('.badge.is-locked .badge-progress')!.textContent).toContain('1 of 6 dice');
     });
@@ -313,6 +313,40 @@ describe('AppComponent', () => {
       fixture.detectChanges();
       tab().dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight'}));
       expect(app.statsTab).toBe('daily');
+    });
+
+    it('gives the day a quest to tick off, then a line to note what got done', async () => {
+      dice.next = [12];
+      await app.roll();
+      fixture.detectChanges();
+      const el: HTMLElement = fixture.nativeElement;
+      const quest = app.today!.quest!;
+      expect(el.querySelector('.quest-text')!.textContent).toContain(app.questText(quest.id));
+      expect(el.querySelector('.quest-form')).toBeNull();
+
+      (el.querySelector('.quest-check') as HTMLInputElement).click();
+      fixture.detectChanges();
+      expect(app.today!.quest!.done).toBe(true);
+      const input = el.querySelector('.quest-form input') as HTMLInputElement;
+      input.value = 'Shipped the slides';
+      (el.querySelector('.quest-form') as HTMLFormElement).dispatchEvent(new Event('submit'));
+      fixture.detectChanges();
+      expect(app.today!.note).toBe('Shipped the slides');
+      expect(el.querySelector('.quest-note')!.textContent).toContain('Shipped the slides');
+      expect(el.querySelector('.quest-form')).toBeNull();
+
+      // Practice rolls show the practice result, not the day's quest.
+      dice.next = [3];
+      await app.roll();
+      fixture.detectChanges();
+      expect(el.querySelector('.quest')).toBeNull();
+    });
+
+    it('hides the quest when it is switched off', async () => {
+      (fixture.nativeElement.querySelector('#quests-switch') as HTMLInputElement).click();
+      await app.roll();
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('.quest')).toBeNull();
     });
 
     it('hides Inspiration when it is switched off', async () => {

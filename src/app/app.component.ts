@@ -8,6 +8,7 @@ import {ConfettiService} from './components/confetti/confetti.service';
 import {Badge, BADGES, newBadges, Progress} from './achievements';
 import {CalendarDay, CalendarMonth, calendarMonth, earliestMonth, shiftMonth} from './calendar';
 import {CrackPath, crackPaths} from './crack';
+import {NOTE_LIMIT, questById} from './quests';
 import {activeSeason, Season, seasonKey, SEASONS} from './seasons';
 import {shareText} from './share';
 import {DiceService} from './dice.service';
@@ -163,6 +164,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   condition: DayCondition = 'clear';
   /** Counts throws, so a foggy table fogs over again for each one. */
   throwCount = 0;
+  readonly noteLimit = NOTE_LIMIT;
+  /** Whether today's saved note is open for editing on the felt. */
+  editingNote = false;
 
   ready = false;
   rolling = false;
@@ -347,6 +351,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
     this.rolling = true;
     this.throwCount++;
+    this.editingNote = false;
     this.result = null;
     this.refreshCrack();
     this.announcement = '';
@@ -549,6 +554,50 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.conditionDialogRef.nativeElement.showModal();
   }
 
+  questText(id: string): string {
+    return questById(id)?.text ?? '';
+  }
+
+  setQuestDone(done: boolean): void {
+    if (!this.today) {
+      return;
+    }
+    this.stats = this.statsService.setQuestDone(this.today.date, done);
+    this.refreshDerived();
+    this.awardBadges();
+    if (done) {
+      // The note field appears once the quest is ticked.
+      setTimeout(() => document.getElementById('quest-note')?.focus());
+    }
+  }
+
+  /** Saves a day's note: today's from the felt, or any day's from the calendar. */
+  saveNote(event: Event, note: string, date = this.today?.date): void {
+    event.preventDefault();
+    if (!date) {
+      return;
+    }
+    this.stats = this.statsService.setNote(date, note);
+    this.editingNote = false;
+    this.refreshDerived();
+    this.awardBadges();
+  }
+
+  /** Badges that come from quests and notes rather than a roll. */
+  private awardBadges(): void {
+    const badges = newBadges(this.stats, null);
+    if (!badges.length) {
+      return;
+    }
+    this.stats = this.statsService.award(badges.map(b => b.id));
+    this.refreshDerived();
+    if (this.result) {
+      this.result = {...this.result, badges: [...this.result.badges, ...badges]};
+    }
+    this.announcement = `${badges.length === 1 ? 'Badge' : 'Badges'} unlocked: ${this.badgeNames(badges)}.`;
+    this.sound.badgeUnlocked();
+  }
+
   /** A day's condition, for the calendar. */
   conditionOn(date: string): ConditionInfo | null {
     const condition = this.stats.conditions[date];
@@ -653,6 +702,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.prefs = {...this.prefs, vibration};
     this.prefsService.save(this.prefs);
     this.applyTable();
+  }
+
+  setQuests(quests: boolean): void {
+    this.prefs = {...this.prefs, quests};
+    this.prefsService.save(this.prefs);
   }
 
   setRerolls(rerolls: boolean): void {

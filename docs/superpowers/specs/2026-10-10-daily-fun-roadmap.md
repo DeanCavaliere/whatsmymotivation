@@ -200,7 +200,8 @@ Each player gets their own random condition each day. The condition is rolled th
 **Phone fit:**
 
 - The quest adds one row of about 44px. The felt's Share and Reroll buttons collapse into an icon row on phones to make room.
-- Placement is mocked against the alternative, a "Today" sheet that slides up from the bottom, before building.
+- Placement: written on the felt under the message (chosen over a slide-up "Today" sheet). Share and Reroll shrink to icons when the table is under 480px wide.
+- Built: the quest text uses the result's ink colors rather than the chalk color, so it passes 4.5:1 on every felt. A reroll brings a new quest and keeps the note. Practice rolls hide the quest.
 
 **Storage:** each day record gains `quest?: {id, done}` and `note?: string`.
 

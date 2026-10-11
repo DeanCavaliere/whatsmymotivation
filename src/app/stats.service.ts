@@ -1,6 +1,7 @@
 import {Inject, Injectable, InjectionToken} from '@angular/core';
 import {DayCondition, INSPIRED_AT, isDayCondition, pruneConditions, rollCondition} from './conditions';
 import {d20Scale, DIE_SIDES, DieSides, isDieSides, RollMode} from './motivation';
+import {NOTE_LIMIT, questById, questFor} from './quests';
 
 export type KeyValueStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
@@ -48,6 +49,10 @@ export interface DayRoll {
   mode: RollMode;
   /** The roll a reroll replaced. */
   rerolledFrom?: { value: number; sides: DieSides };
+  /** The day's quest, picked to match the roll. */
+  quest?: { id: string; done: boolean };
+  /** A one-line note about what got done. */
+  note?: string;
 }
 
 /** counts[sides][face - 1] is how many times that face was the kept roll on that die. */
@@ -291,6 +296,14 @@ function sanitizeDay(raw: unknown): DayRoll | null {
   if (from && isDieSides(from.sides) && isFace(from.value, from.sides)) {
     day.rerolledFrom = {value: from.value, sides: from.sides};
   }
+  const quest = r['quest'] as Partial<DayRoll['quest']> | undefined;
+  if (quest && typeof quest.id === 'string' && questById(quest.id)) {
+    day.quest = {id: quest.id, done: quest.done === true};
+  }
+  const note = r['note'];
+  if (typeof note === 'string' && note.trim()) {
+    day.note = note.trim().slice(0, NOTE_LIMIT);
+  }
   return day;
 }
 
@@ -390,7 +403,8 @@ export class StatsService {
    * The first roll of each local day becomes that day's roll, extends the streak,
    * and may earn ✦ (see `inspirationReasons`).
    */
-  record(value: number, sides: DieSides, mode: RollMode, now: Date = new Date(), condition: DayCondition = 'clear'): Stats {
+  record(value: number, sides: DieSides, mode: RollMode, now: Date = new Date(), condition: DayCondition = 'clear',
+         random: () => number = Math.random): Stats {
     if (!isDieSides(sides) || !isFace(value, sides)) {
       throw new Error(`Not a d${sides} value: ${value}`);
     }
@@ -401,7 +415,8 @@ export class StatsService {
     const date = localDateKey(now);
     const firstRollOfDay = !todayRoll(stats, now);
     if (firstRollOfDay) {
-      stats.days = [{date, value, sides, mode}, ...stats.days].slice(0, DAYS_LIMIT);
+      const quest = {id: questFor(value, sides, random).id, done: false};
+      stats.days = [{date, value, sides, mode, quest}, ...stats.days].slice(0, DAYS_LIMIT);
       bump(stats.dailyCounts, sides, value);
     }
     const {streak} = stats;
@@ -422,7 +437,8 @@ export class StatsService {
    * Spends one ✦ to replace today's roll with a new one. The reroll counts as a roll like any
    * other; the daily stats swap the old roll for the new one. A natural top face earns a ✦ back.
    */
-  reroll(value: number, sides: DieSides, mode: RollMode, now: Date = new Date(), condition: DayCondition = 'clear'): Stats {
+  reroll(value: number, sides: DieSides, mode: RollMode, now: Date = new Date(), condition: DayCondition = 'clear',
+         random: () => number = Math.random): Stats {
     if (!isDieSides(sides) || !isFace(value, sides)) {
       throw new Error(`Not a d${sides} value: ${value}`);
     }
@@ -437,8 +453,11 @@ export class StatsService {
 
     bump(stats.dailyCounts, today.sides, today.value, -1);
     bump(stats.dailyCounts, sides, value);
+    // A new roll brings a new quest to match it; the note stays.
     stats.days[stats.days.indexOf(today)] = {
       date: today.date, value, sides, mode, rerolledFrom: {value: today.value, sides: today.sides},
+      quest: {id: questFor(value, sides, random).id, done: false},
+      ...(today.note ? {note: today.note} : {}),
     };
 
     const change = rollScore(value, sides) - rollScore(today.value, today.sides);
@@ -451,6 +470,27 @@ export class StatsService {
     const spent = {...stats.inspiration, held: stats.inspiration.held - 1};
     stats.inspiration = earn(spent, inspirationReasons(value, sides, stats.streak.current, false, condition).length);
     this.save(stats);
+    return stats;
+  }
+
+  /** Ticks or unticks a day's quest. */
+  setQuestDone(date: string, done: boolean): Stats {
+    return this.updateDay(date, day => day.quest ? {...day, quest: {...day.quest, done}} : day);
+  }
+
+  /** Saves a day's one-line note; an empty note removes it. */
+  setNote(date: string, note: string): Stats {
+    const text = note.trim().slice(0, NOTE_LIMIT);
+    return this.updateDay(date, ({note: _, ...day}) => text ? {...day, note: text} : day);
+  }
+
+  private updateDay(date: string, change: (day: DayRoll) => DayRoll): Stats {
+    const stats = this.load();
+    const index = stats.days.findIndex(d => d.date === date);
+    if (index >= 0) {
+      stats.days[index] = change(stats.days[index]);
+      this.save(stats);
+    }
     return stats;
   }
 

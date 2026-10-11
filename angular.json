@@ -35,7 +35,7 @@
             "styles": [
               "src/styles.css",
               "src/panels.css",
-              "src/doodles.css"
+              "src/table.css"
             ],
             "scripts": [],
             "browser": "src/main.ts"

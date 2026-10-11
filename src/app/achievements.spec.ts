@@ -92,6 +92,20 @@ describe('badges', () => {
     expect(ids(stats({conditions: {'2026-10-03': 'blessed', '2026-10-09': 'hexed'}}), roll(10))).not.toContain('blessed-and-cursed');
   });
 
+  it('give Questmaster and Chronicler for 10 finished quests and 10 notes, even without a roll', () => {
+    const days = Array.from({length: 10}, (_, i) => ({
+      date: `2026-09-${String(i + 1).padStart(2, '0')}`, value: 10, sides: 20 as const, mode: 'normal' as const,
+      quest: {id: 'walk', done: true}, note: 'Done',
+    }));
+    expect(newBadges(stats({days}), null).map(b => b.id)).toEqual(expect.arrayContaining(['questmaster', 'chronicler']));
+    expect(newBadges(stats({days: days.slice(1)}), null).map(b => b.id)).not.toContain('questmaster');
+  });
+
+  it('give no roll badges when there is no roll', () => {
+    // First roll only counts rolls, and these stats have some.
+    expect(newBadges(stats(), null).map(b => b.id)).toEqual(['first-roll']);
+  });
+
   it('are only new once', () => {
     expect(ids(stats({achievements: {'natural': '2026-10-01'}}), roll(20))).not.toContain('natural');
   });
