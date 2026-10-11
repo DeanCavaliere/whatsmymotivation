@@ -3,6 +3,10 @@ import { bootstrapApplication } from '@angular/platform-browser';
 import { provideServiceWorker } from '@angular/service-worker';
 
 import { AppComponent } from './app/app.component';
+import { seedDevSave } from './dev/seed';
+
+// Dev builds only: ?save=month loads a preset save before the app reads it (see src/dev/seed.ts).
+seedDevSave();
 
 bootstrapApplication(AppComponent, {
   providers: [

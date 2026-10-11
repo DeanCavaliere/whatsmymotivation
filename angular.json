@@ -54,6 +54,12 @@
                   "maximumError": "12kb"
                 }
               ],
+              "fileReplacements": [
+                {
+                  "replace": "src/dev/seed.ts",
+                  "with": "src/dev/seed.prod.ts"
+                }
+              ],
               "outputHashing": "all",
               "serviceWorker": "ngsw-config.json"
             },

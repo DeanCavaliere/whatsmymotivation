@@ -35,7 +35,8 @@ npm install
 npm start          # dev server on http://localhost:4405
 npm test           # unit tests (Vitest + jsdom)
 # Dev server only: /?rolls=20,1 queues the next results, /?season=festive previews a season,
-# /?condition=foggy sets today's table condition
+# /?condition=foggy sets today's table condition, /?save=month loads a preset save
+# (fresh, day2, month, year; see src/dev/saves) and /?save=mine puts yours back
 npm run build      # production build into dist/whatsmymotivation
 ```
 
@@ -51,6 +52,7 @@ Pushing to `master` deploys to GitHub Pages via `.github/workflows/workflow.yml`
 | `src/app/prefs.service.ts` | Die choice, table themes, dice colors and the saved choice |
 | `src/app/dice.service.ts` | dice-box wrapper: init, physics tuning, fallback |
 | `src/app/components/confetti` | Canvas confetti bursts |
+| `src/dev` | Dev-only preset saves for `?save=`, played through the real stats code; production builds swap in a stub |
 | `src/assets/img` | Table artwork (WebP). The frame is drawn as a CSS 9-slice `border-image` |
 | `src/assets/icons`, `src/manifest.webmanifest` | App icons and web app manifest for installing to a home screen |
 | `node_modules/@3d-dice/dice-box/dist/assets` | dice-box physics (Ammo WASM) and dice themes, copied to `assets/dice-box` at build time |
