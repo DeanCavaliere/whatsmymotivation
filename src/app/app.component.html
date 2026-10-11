@@ -139,13 +139,13 @@
               <span class="quest-text" id="quest-text"><small>Today's quest</small><span>{{ questText(q.id) }}</span></span>
             </label>
             @if (q.done) {
-              @if (today?.note && !editingNote) {
+              @if (today.note && !editingNote) {
                 <button type="button" class="quest-note" (click)="editingNote = true" title="Edit your note">
-                  “{{ today?.note }}”<span class="visually-hidden">, edit your note</span>
+                  “{{ today.note }}”<span class="visually-hidden">, edit your note</span>
                 </button>
               } @else {
                 <form class="quest-form" (submit)="saveNote($event, noteInput.value)">
-                  <input #noteInput id="quest-note" type="text" [maxLength]="noteLimit" [value]="today?.note ?? ''"
+                  <input #noteInput id="quest-note" type="text" [maxLength]="noteLimit" [value]="today.note ?? ''"
                     placeholder="What did you get done?" aria-label="What did you get done? (optional)">
                   <button type="submit" class="btn btn-ghost btn-small">Save</button>
                 </form>
