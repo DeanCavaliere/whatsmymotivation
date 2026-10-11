@@ -31,7 +31,7 @@ export class DiceService {
           id: 'dice-canvas',
           assetPath: '/assets/dice-box/',
           theme: 'default',
-          // Gold reads clearly on the green felt (the library default is green).
+          // Overridden per roll by the chosen dice color.
           themeColor: '#d9a13b',
           offscreen: supportsOffscreenWebGL(),
           // Narrow (portrait) tables get a smaller die so it has room to tumble.
@@ -55,7 +55,7 @@ export class DiceService {
   }
 
   /** Resolves with every die's value (one for normal, two for advantage/disadvantage). */
-  async roll(mode: RollMode): Promise<number[]> {
+  async roll(mode: RollMode, themeColor?: string): Promise<number[]> {
     const count = mode === 'normal' ? 1 : 2;
     const fallback = () => Array.from({length: count}, randomD20);
 
@@ -64,7 +64,7 @@ export class DiceService {
       return fallback();
     }
 
-    const rolled: Promise<number[]> = this.zone.runOutsideAngular(() => this.box.roll(diceNotation(mode)))
+    const rolled: Promise<number[]> = this.zone.runOutsideAngular(() => this.box.roll(diceNotation(mode), themeColor ? {themeColor} : {}))
       .then((dice: { value: number }[]) => dice.map(d => d.value));
     const timedOut = delay(ROLL_TIMEOUT_MS).then(() => null);
     const values = await Promise.race([rolled, timedOut]);

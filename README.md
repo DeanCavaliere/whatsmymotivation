@@ -13,6 +13,7 @@ Live at [whatsmymotivation.today](https://whatsmymotivation.today).
 - Installable and works offline: a service worker (`ngsw-config.json`) caches the app, artwork and dice physics. It is only enabled in production builds
 - Stats stored in `localStorage`: lifetime/session counts, average, natural 20s and 1s, roll distribution, recent rolls
 - Share a roll (Web Share API, or copy to clipboard)
+- Table themes and dice colors (Customize, the palette button). The felt is one neutral texture tinted with CSS `background-blend-mode`, so a new table color is a one-line addition to `prefs.service.ts`
 - Roll with the button, Space/Enter, or by tapping the table
 
 ## Development
@@ -34,6 +35,7 @@ Pushing to `master` deploys to GitHub Pages via `.github/workflows/workflow.yml`
 | --- | --- |
 | `src/app/motivation.ts` | Pure game logic: tiers, messages, advantage/disadvantage |
 | `src/app/stats.service.ts` | Persistent stats (versioned key, legacy migration, multi-tab safe) |
+| `src/app/prefs.service.ts` | Table themes, dice colors and the saved choice |
 | `src/app/dice.service.ts` | dice-box wrapper: init, physics tuning, fallback |
 | `src/app/components/confetti` | Canvas confetti / tears overlay |
 | `src/assets/img` | Table artwork (WebP). The frame is drawn as a CSS 9-slice `border-image` |

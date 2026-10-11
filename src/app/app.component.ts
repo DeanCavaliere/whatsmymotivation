@@ -5,6 +5,7 @@ import {ConfettiComponent} from './components/confetti/confetti.component';
 import {ConfettiService} from './components/confetti/confetti.service';
 import {DiceService} from './dice.service';
 import {keptValue, RollMode, Tier, tierFor, Verdict, verdictFor} from './motivation';
+import {DICE_COLORS, diceColor, Prefs, PREFS_KEY, PrefsService, TABLE_THEMES, tableTheme} from './prefs.service';
 import {
   activeStreak,
   Stats,
@@ -37,6 +38,14 @@ interface ChartBar {
   height: number;
 }
 
+/** Chromium's install prompt event; not in the DOM typings. */
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
+export type InstallOption = 'prompt' | 'ios' | 'installed' | null;
+
 const SITE_URL = 'https://whatsmymotivation.today';
 const CHART = {width: 400, height: 120, gap: 2, barWidth: 18};
 
@@ -50,6 +59,7 @@ const CHART = {width: 400, height: 120, gap: 2, barWidth: 18};
 export class AppComponent implements AfterViewInit, OnDestroy {
   @ViewChild('diceBox', {static: true}) diceBoxRef!: ElementRef<HTMLElement>;
   @ViewChild('statsDialog', {static: true}) statsDialogRef!: ElementRef<HTMLDialogElement>;
+  @ViewChild('customizeDialog', {static: true}) customizeDialogRef!: ElementRef<HTMLDialogElement>;
 
   readonly modes: { value: RollMode, label: string, hint: string }[] = [
     {value: 'disadvantage', label: 'Disadv.', hint: 'Roll two dice, keep the lower'},
@@ -57,6 +67,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     {value: 'advantage', label: 'Adv.', hint: 'Roll two dice, keep the higher'},
   ];
   readonly chart = CHART;
+  readonly tableThemes = TABLE_THEMES;
+  readonly diceColors = DICE_COLORS;
 
   ready = false;
   rolling = false;
@@ -71,16 +83,23 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   bars: ChartBar[] = [];
   hoveredBar: ChartBar | null = null;
   confirmingReset = false;
+  prefs: Prefs;
+  install: InstallOption = null;
   toast = '';
+  private installPrompt: BeforeInstallPromptEvent | null = null;
   private toastTimer?: ReturnType<typeof setTimeout>;
 
   constructor(private dice: DiceService,
               private statsService: StatsService,
               private confetti: ConfettiService,
+              private prefsService: PrefsService,
               private zone: NgZone,
               @Optional() swUpdate: SwUpdate | null) {
     // A cached version whose files are gone from the server can't recover on its own.
     swUpdate?.unrecoverable.subscribe(() => document.location.reload());
+    this.prefs = this.prefsService.load();
+    this.applyTable();
+    this.install = detectInstallOption();
     this.stats = this.statsService.load();
     this.summary = summarize(this.stats);
     this.refreshDerived();
@@ -129,6 +148,23 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.stats = this.statsService.load();
       this.refreshDerived();
     }
+    if (event.key === PREFS_KEY || event.key === null) {
+      this.prefs = this.prefsService.load();
+      this.applyTable();
+    }
+  }
+
+  /** Chromium browsers offer an install prompt that we can trigger from our own button. */
+  @HostListener('window:beforeinstallprompt', ['$event'])
+  onBeforeInstallPrompt(event: Event): void {
+    this.installPrompt = event as BeforeInstallPromptEvent;
+    this.install = 'prompt';
+  }
+
+  @HostListener('window:appinstalled')
+  onAppInstalled(): void {
+    this.installPrompt = null;
+    this.install = 'installed';
   }
 
   /** The app may sit open (or installed) across midnight; refresh day-based state on return. */
@@ -152,7 +188,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.result = null;
     const mode = this.mode;
     try {
-      const values = await this.dice.roll(mode);
+      const values = await this.dice.roll(mode, diceColor(this.prefs.dice).color);
       const value = keptValue(values, mode);
       const hadToday = !!todayRoll(this.stats);
       const previousBest = this.stats.streak.best;
@@ -232,15 +268,38 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.statsDialogRef.nativeElement.showModal();
   }
 
-  closeStats(): void {
-    this.statsDialogRef.nativeElement.close();
+  openCustomize(): void {
+    this.customizeDialogRef.nativeElement.showModal();
   }
 
   /** Clicks on the backdrop land on the dialog element itself. */
   onDialogClick(event: MouseEvent): void {
-    if (event.target === this.statsDialogRef.nativeElement) {
-      this.closeStats();
+    if (event.target instanceof HTMLDialogElement && event.target === event.currentTarget) {
+      event.target.close();
     }
+  }
+
+  setTable(id: string): void {
+    this.prefs = {...this.prefs, table: id};
+    this.prefsService.save(this.prefs);
+    this.applyTable();
+  }
+
+  setDice(id: string): void {
+    this.prefs = {...this.prefs, dice: id};
+    this.prefsService.save(this.prefs);
+  }
+
+  async installApp(): Promise<void> {
+    const prompt = this.installPrompt;
+    if (!prompt) {
+      return;
+    }
+    await prompt.prompt();
+    const {outcome} = await prompt.userChoice;
+    // The event can only be used once.
+    this.installPrompt = null;
+    this.install = outcome === 'accepted' ? 'installed' : null;
   }
 
   resetStats(): void {
@@ -269,9 +328,26 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     });
   }
 
+  private applyTable(): void {
+    const theme = tableTheme(this.prefs.table);
+    const root = document.documentElement.style;
+    root.setProperty('--felt', theme.felt);
+    root.setProperty('--chalk', theme.chalk);
+  }
+
   private showToast(message: string): void {
     this.toast = message;
     clearTimeout(this.toastTimer);
     this.toastTimer = setTimeout(() => this.toast = '', 2500);
   }
+}
+
+function detectInstallOption(): InstallOption {
+  const nav = navigator as Navigator & { standalone?: boolean };
+  if (nav.standalone || window.matchMedia?.('(display-mode: standalone)').matches) {
+    return 'installed';
+  }
+  // iOS has no install prompt; installing is done from Safari's share sheet.
+  const ios = /iPad|iPhone|iPod/.test(nav.userAgent) || (nav.platform === 'MacIntel' && nav.maxTouchPoints > 1);
+  return ios ? 'ios' : null;
 }

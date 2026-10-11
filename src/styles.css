@@ -4,7 +4,8 @@
   --surface: #17110c;
   --surface-raised: #241a12;
   --line: rgba(243, 234, 216, 0.14);
-  --felt: #083828;
+  /* Table theme; overridden at runtime from prefs.service.ts. */
+  --felt: #10422f;
   --chalk: rgba(150, 230, 210, 0.42);
   --accent: #e7a33e;
   --accent-ink: #1d1206;
@@ -115,6 +116,24 @@ app-root {
   background: transparent;
   color: var(--danger);
   border-color: rgba(255, 138, 122, 0.4);
+}
+
+.btn-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+}
+
+.btn-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .btn-small {

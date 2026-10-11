@@ -25,9 +25,22 @@
           [disabled]="rolling" (click)="setMode(m.value)">{{ m.label }}</button>
         }
       </div>
-      <button type="button" class="btn btn-ghost" (click)="openStats()" aria-haspopup="dialog">Stats</button>
       <button type="button" class="btn btn-primary" (click)="roll()" [disabled]="!ready || rolling">
         {{ rollLabel }}
+      </button>
+    </div>
+
+    <div class="tools">
+      <button type="button" class="btn btn-ghost btn-icon" (click)="openStats()" aria-haspopup="dialog"
+        aria-label="Stats" title="Stats">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M12 20V4M19 20v-6"/></svg>
+      </button>
+      <button type="button" class="btn btn-ghost btn-icon" (click)="openCustomize()" aria-haspopup="dialog"
+        aria-label="Customize" title="Customize">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.7-1.7H17a4 4 0 0 0 4-4c0-4.4-4-8.2-9-8.2Z"/>
+          <circle cx="7.5" cy="11.5" r="1.2"/><circle cx="10.5" cy="7.5" r="1.2"/><circle cx="15" cy="8" r="1.2"/>
+        </svg>
       </button>
     </div>
   </header>
@@ -67,11 +80,11 @@
   </main>
 </div>
 
-<dialog #statsDialog class="stats" aria-labelledby="stats-title" (click)="onDialogClick($event)">
-  <div class="stats-body">
-    <header class="stats-header">
+<dialog #statsDialog class="panel" aria-labelledby="stats-title" (click)="onDialogClick($event)">
+  <div class="panel-body">
+    <header class="panel-header">
       <h2 id="stats-title">Your motivation stats</h2>
-      <button type="button" class="btn btn-ghost btn-small" (click)="closeStats()" aria-label="Close stats">✕</button>
+      <button type="button" class="btn btn-ghost btn-small" (click)="statsDialog.close()" aria-label="Close stats">✕</button>
     </header>
 
     <dl class="tiles">
@@ -152,11 +165,60 @@
       <p class="empty">No tracked rolls yet. Close this and roll the die!</p>
     }
 
-    <footer class="stats-footer">
+    <footer class="panel-footer">
       <button type="button" class="btn btn-danger btn-small" (click)="resetStats()">
         {{ confirmingReset ? 'Click again to erase everything' : 'Reset stats' }}
       </button>
     </footer>
+  </div>
+</dialog>
+
+<dialog #customizeDialog class="panel" aria-labelledby="customize-title" (click)="onDialogClick($event)">
+  <div class="panel-body">
+    <header class="panel-header">
+      <h2 id="customize-title">Customize</h2>
+      <button type="button" class="btn btn-ghost btn-small" (click)="customizeDialog.close()" aria-label="Close">✕</button>
+    </header>
+
+    <fieldset class="swatches">
+      <legend>Table</legend>
+      @for (t of tableThemes; track t.id) {
+        <label class="swatch">
+          <input type="radio" name="table" [value]="t.id" [checked]="prefs.table === t.id" (change)="setTable(t.id)">
+          <span class="swatch-chip swatch-felt" [style.--chip]="t.felt"></span>
+          {{ t.label }}
+        </label>
+      }
+    </fieldset>
+
+    <fieldset class="swatches">
+      <legend>Dice</legend>
+      @for (d of diceColors; track d.id) {
+        <label class="swatch">
+          <input type="radio" name="dice" [value]="d.id" [checked]="prefs.dice === d.id" (change)="setDice(d.id)">
+          <span class="swatch-chip swatch-die" [style.--chip]="d.color"></span>
+          {{ d.label }}
+        </label>
+      }
+    </fieldset>
+    <p class="panel-note">The new dice color shows up on your next roll.</p>
+
+    @if (install) {
+      <h3>App</h3>
+      @switch (install) {
+        @case ('prompt') {
+          <p class="panel-note">Install it to roll from your home screen or dock. It works offline, too.</p>
+          <button type="button" class="btn btn-primary btn-small" (click)="installApp()">Install app</button>
+        }
+        @case ('ios') {
+          <p class="panel-note">To add it to your home screen, tap <strong>Share</strong> in Safari, then
+            <strong>Add to Home Screen</strong>. It works offline, too.</p>
+        }
+        @case ('installed') {
+          <p class="panel-note">Installed. It works offline, too.</p>
+        }
+      }
+    }
   </div>
 </dialog>
 

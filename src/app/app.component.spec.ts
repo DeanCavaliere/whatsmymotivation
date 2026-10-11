@@ -6,12 +6,14 @@ import {addDays, KeyValueStorage, localDateKey, STATS_KEY, STATS_STORAGE} from '
 
 class FakeDiceService {
   next: number[] = [12];
+  lastColor?: string;
 
   async init(): Promise<'fallback'> {
     return 'fallback';
   }
 
-  async roll(_mode: RollMode): Promise<number[]> {
+  async roll(_mode: RollMode, color?: string): Promise<number[]> {
+    this.lastColor = color;
     return this.next;
   }
 }
@@ -95,6 +97,18 @@ describe('AppComponent', () => {
       await app.roll();
       expect(app.result?.isToday).toBe(false);
       expect(app.today?.value).toBe(12);
+    });
+
+    it('rolls in the chosen dice color and tints the table', async () => {
+      const ruby = fixture.nativeElement.querySelector('input[name="dice"][value="ruby"]') as HTMLInputElement;
+      ruby.click();
+      const royal = fixture.nativeElement.querySelector('input[name="table"][value="royal"]') as HTMLInputElement;
+      royal.click();
+      await app.roll();
+
+      expect(dice.lastColor).toBe('#b3262d');
+      expect(document.documentElement.style.getPropertyValue('--felt')).toBe('#143a66');
+      expect(JSON.parse(store.get('wmm.prefs.v1')!)).toEqual({table: 'royal', dice: 'ruby'});
     });
   });
 
