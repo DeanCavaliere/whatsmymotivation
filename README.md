@@ -1,27 +1,58 @@
-# Whatsmymotivation
+# What's My Motivation Today?
 
-This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 16.0.2.
+Roll a d20 to find out how motivated you'll be today. Natural 20? Carpe diem. Natural 1? Back to bed.
 
-## Development server
+Live at [whatsmymotivation.today](https://whatsmymotivation.today).
 
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The application will automatically reload if you change any of the source files.
+## Features
 
-## Code scaffolding
+- 3D physics dice via [@3d-dice/dice-box](https://fantasticdice.games/), with a plain random roll as a fallback when WebGL isn't available
+- Normal, advantage (2d20 keep highest) and disadvantage (2d20 keep lowest) rolls
+- The first roll of each day is "today's roll"; later rolls are re-rolls
+- Daily streaks (current and best), with a nudge when today's roll would keep one going
+- Installable and works offline: a service worker (`ngsw-config.json`) caches the app, artwork and dice physics. It is only enabled in production builds
+- Pick your die (d4 to d20) in Settings (the cog button), with each one's odds of a crit, a good day and a bad day. Smaller dice are swingier; every die crits on its top face and fails on a 1
+- Stats stored in `localStorage`, in two tabs: daily rolls (each day's first roll: streaks, days rolled, a month calendar going back about a year, distribution) and all rolls (lifetime/session counts, crits, distribution, recent rolls). Distributions are per die
+- Share the day's roll with a seven-day emoji strip and the streak (Web Share API, or copy to clipboard)
+- Getting started: a three-step checklist for new players (roll, finish the quest, come back another day). Finishing or skipping it earns the first ✦, and table conditions hold off until then
+- Inspiration (✦): earned for a natural top face as the day's roll and every 7th day of a streak, up to 3 held. The first comes from finishing Getting started. Spend one to reroll the day's roll, after a confirmation. The daily stats track how often rerolls helped or backfired. Can be switched off in Settings
+- Accent colors (Copper, Arcane, Ember, Jade, Rose), table themes and dice colors (Settings). The felt is one neutral texture tinted with CSS `background-blend-mode`, so a new table color is a one-line addition to `prefs.service.ts`
+- Seasonal tables (on by default): Spooky in October, Festive in December, Valentine's Feb 10–14 and Lucky Mar 15–17 each bring their own felt, chalk, dice color, corner doodles and messages. Picking your own table or dice turns the current season off until it ends. Seasons are data in `seasons.ts`
+- Sound (on by default, with a mute button in the header): recorded dice from Kenney's CC0 Casino Audio pack, softened for felt and chained into a short tumble, plus a synthesized fanfare for a natural top face and a sad trombone for a 1. Follows the iPhone silent switch. Vibration on Android, off under reduced motion
+- Daily table conditions: about eight days a month, each player's table rolls its own condition (Foggy, Rainy or Snowy, Stormy, Low gravity, Inspired, Blessed, Hexed), shown as a pill on the felt. Fog hides the result until wiped; Blessed and Hexed set the day's roll mode; Inspired turns a high roll into ✦. The odds are in `conditions.ts`
+- Daily quest (on by default): the day's roll comes with a small, medium or large quest to match it (`quests.ts`). Tick it off and note what you got done in one line; notes can be edited from the calendar and never leave your device
+- Badges (Stats › Badges): twenty to start, from First roll to a 100-day streak and 1,000 rolls, defined in `achievements.ts`. Unlocks show on the table with a tick sound
+- Rolls only happen from the Roll button, so a stray key press or tap can't replace the day's roll
+- A natural top face bursts confetti from the number; a natural 1 jolts the table, drains its color and leaves a crack that stays all day while that 1 is the day's roll
+- Accessible: text meets WCAG AA contrast on every table theme, chosen options are marked by more than color, results are announced to screen readers, the chart has a table equivalent, and it supports keyboard focus, forced colors and reduced motion
 
-Run `ng generate component component-name` to generate a new component. You can also use `ng generate directive|pipe|service|class|guard|interface|enum|module`.
+## Development
 
-## Build
+Requires Node 22 or 24 (see `.nvmrc`).
 
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory.
+```bash
+npm install
+npm start          # dev server on http://localhost:4405
+npm test           # unit tests (Vitest + jsdom)
+# Dev server only: /?rolls=20,1 queues the next results, /?season=festive previews a season,
+# /?condition=foggy sets today's table condition, /?save=month loads a preset save
+# (fresh, day2, month, year; see src/dev/saves) and /?save=mine puts yours back
+npm run build      # production build into dist/whatsmymotivation
+```
 
-## Running unit tests
+Pushing to `master` deploys to GitHub Pages via `.github/workflows/workflow.yml`.
 
-Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.io).
+## Project layout
 
-## Running end-to-end tests
-
-Run `ng e2e` to execute the end-to-end tests via a platform of your choice. To use this command, you need to first add a package that implements end-to-end testing capabilities.
-
-## Further help
-
-To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI Overview and Command Reference](https://angular.io/cli) page.
+| Path | What it is |
+| --- | --- |
+| `src/app/motivation.ts` | Pure game logic: tiers, messages, advantage/disadvantage |
+| `src/app/stats.service.ts` | Persistent stats (versioned key, migrates older versions, multi-tab safe) |
+| `src/panels.css` | Styles for the stats and settings dialogs |
+| `src/app/prefs.service.ts` | Die choice, table themes, dice colors and the saved choice |
+| `src/app/dice.service.ts` | dice-box wrapper: init, physics tuning, fallback |
+| `src/app/components/confetti` | Canvas confetti bursts |
+| `src/dev` | Dev-only preset saves for `?save=`, played through the real stats code; production builds swap in a stub |
+| `src/assets/img` | Table artwork (WebP). The frame is drawn as a CSS 9-slice `border-image` |
+| `src/assets/icons`, `src/manifest.webmanifest` | App icons and web app manifest for installing to a home screen |
+| `node_modules/@3d-dice/dice-box/dist/assets` | dice-box physics (Ammo WASM) and dice themes, copied to `assets/dice-box` at build time |

@@ -1,21 +1,470 @@
-#overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
+.app {
+  display: flex;
+  flex-direction: column;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent black */
-  z-index: 999; /* Ensure it's above other content */
 }
 
-#popup {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%); /* Center the popup */
-  background-color: white;
-  padding: 20px;
+/* ---------- Top bar ---------- */
+
+.topbar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 8px 16px;
+  padding-top: max(8px, env(safe-area-inset-top));
+}
+
+.hud {
+  display: flex;
+  gap: 20px;
+  margin: 0;
+}
+
+.hud div {
+  display: flex;
+  flex-direction: column;
+}
+
+.hud dt {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.hud dd {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.die-tag {
+  margin-left: 4px;
+  font-size: 0.6em;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.hud dd.is-at-risk {
+  color: var(--accent);
+}
+
+/* The ✦ count opens "How Inspiration works". */
+.hud-button {
+  margin: 0 -6px;
+  padding: 0 6px;
+  border: 0;
   border-radius: 8px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-  z-index: 1000; /* Ensure it's above the overlay */
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.hud-button:hover {
+  background: var(--hover);
+}
+
+.hud-button small {
+  margin-left: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.tools {
+  display: flex;
+  gap: 6px;
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+
+.segmented button {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.segmented button[aria-pressed="true"] {
+  background: var(--accent-fill);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  color: var(--accent);
+}
+
+@media (forced-colors: active) {
+  .segmented button[aria-pressed="true"] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+}
+
+.segmented button:disabled {
+  cursor: default;
+}
+
+.mode-lock {
+  width: 11px;
+  height: 11px;
+  margin-right: 3px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  vertical-align: -1px;
+}
+
+/* Today's table condition, above the fog so it can always be tapped. */
+.condition-pill,
+.tour-pill {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  z-index: 4;
+  translate: -50% 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 4px 9px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(10, 10, 12, 0.72);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.segmented-small button {
+  min-height: 26px;
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+/* ---------- Table: wood frame (9-slice) around the felt ---------- */
+
+.table {
+  /* Frame thickness; the other sides keep the artwork's proportions. */
+  --frame: clamp(34px, 10vmin, 140px);
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  border-style: solid;
+  border-color: #6b3d1f;
+  border-width: calc(var(--frame) * 123 / 143) calc(var(--frame) * 119 / 143) calc(var(--frame) * 142 / 143) var(--frame);
+  border-image: url("/assets/img/frame.webp") 123 119 142 143 stretch;
+  /* A neutral felt texture, tinted by the table theme's --felt color. */
+  background: var(--felt) url("/assets/img/felt.webp") center / cover no-repeat;
+  background-blend-mode: overlay;
+  background-clip: padding-box;
+  touch-action: manipulation;
+  container-type: size;
+}
+
+.table.is-shaken {
+  animation: shake 420ms ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { translate: 0 0; }
+  15% { translate: -10px 2px; }
+  35% { translate: 9px -2px; }
+  55% { translate: -6px 1px; }
+  75% { translate: 3px 0; }
+}
+
+.table-text {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  font-family: var(--font);
+  font-size: 54px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  fill: var(--chalk);
+  text-anchor: middle;
+  transition: opacity 300ms ease;
+}
+
+.table-text.is-dimmed,
+.doodles.is-dimmed {
+  opacity: 0.35;
+}
+
+/* ---------- Natural 1: the table jolts, drains of color, and cracks ---------- */
+
+.table.is-jolted {
+  animation: jolt 420ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+@keyframes jolt {
+  0%, 100% { translate: 0 0; }
+  25% { translate: 0 7px; }
+  55% { translate: -3px -2px; }
+  80% { translate: 2px 1px; }
+}
+
+/* Grays the felt only; the dice, chalk and result sit above it. A flat dark wash rather than a
+   backdrop-filter, which refilters the whole table every frame of the fade and lagged without a GPU. */
+.table::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: rgba(14, 14, 16, 0.66);
+  opacity: 0;
+  transition: opacity 1.6s ease;
+}
+
+.table.is-drained::before {
+  opacity: 1;
+  transition-duration: 250ms;
+}
+
+.crack {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.crack path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.crack-line {
+  stroke: rgba(4, 10, 8, 0.82);
+}
+
+/* A faint lit edge, offset down, so the crack reads as a groove. */
+.crack-edge {
+  stroke: rgba(255, 255, 255, 0.14);
+  translate: 0 1.5px;
+}
+
+.crack.is-fresh {
+  animation: crack-spread 1.1s 120ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+@keyframes crack-spread {
+  from { clip-path: circle(0 at var(--crack-x) var(--crack-y)); }
+  to { clip-path: circle(150% at var(--crack-x) var(--crack-y)); }
+}
+
+/* Above the dice canvas, so a die landing mid-table doesn't cover the number. */
+.result {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  text-align: center;
+  pointer-events: none;
+  /* The felt's texture has bright patches; a lighter gray keeps small text at 4.5:1 on every theme. */
+  --ink-muted: #c8ccd1;
+}
+
+.result .btn {
+  pointer-events: auto;
+}
+
+.result-label {
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.result-value {
+  font-size: clamp(64px, 14vmin, 140px);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--tier, var(--ink));
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45);
+  animation: pop 420ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+/* A natural top face lands with a gold flare that settles into a halo. */
+.result-value[data-tier="crit-success"] {
+  text-shadow: 0 0 14px rgba(255, 213, 74, 0.55), 0 2px 18px rgba(0, 0, 0, 0.45);
+  animation: flare 1.8s ease-out both;
+}
+
+@keyframes flare {
+  0% { transform: scale(0.6); text-shadow: 0 0 0 rgba(255, 213, 74, 0); }
+  18% { transform: scale(1.18); text-shadow: 0 0 28px rgba(255, 213, 74, 0.95), 0 0 60px rgba(255, 190, 40, 0.7); }
+  45% { transform: scale(1); }
+  100% { transform: scale(1); text-shadow: 0 0 14px rgba(255, 213, 74, 0.55), 0 2px 18px rgba(0, 0, 0, 0.45); }
+}
+
+/* A natural 1 drops onto the felt. */
+.result-value[data-tier="crit-fail"] {
+  animation: thud 520ms cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+
+@keyframes thud {
+  0% { transform: translateY(-30px) scale(1.25); }
+  60% { transform: translateY(4px) scale(0.96); }
+  100% { transform: none; }
+}
+
+.result-dropped,
+.result-sub {
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+
+.result-dropped {
+  text-decoration: line-through;
+}
+
+.result-message {
+  max-width: 22em;
+  margin: 8px 0 0;
+  font-size: clamp(17px, 2.6vmin, 26px);
+  font-weight: 600;
+  line-height: 1.25;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
+  animation: fade-up 360ms 120ms ease-out both;
+}
+
+.result-cost {
+  color: var(--accent);
+}
+
+.result-status {
+  color: var(--ink);
+  font-weight: 600;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
+}
+
+.dice-box {
+  position: absolute;
+  inset: 0;
+  margin: 0 auto;
+  pointer-events: none;
+}
+
+/*
+ * dice-box's camera sees slightly less than its physics walls once the table is wider
+ * than ~3:1, so a die could come to rest half off-screen. Cap the dice area's aspect.
+ */
+@supports (width: 1cqh) {
+  .dice-box {
+    max-width: calc(100cqh * 2.2);
+  }
+}
+
+/* The canvas is created by dice-box; its drawing size is taken from this CSS size. */
+.dice-box ::ng-deep canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Scale only: fading in would mix the tier color with the felt, so it looked like it changed color. */
+@keyframes pop {
+  from { transform: scale(0.6); }
+  to { transform: scale(1); }
+}
+
+@keyframes fade-up {
+  from { transform: translateY(6px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* ---------- Toast ---------- */
+
+/* Centered on the felt, like the result above it. */
+.toast {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 16px;
+  width: fit-content;
+  margin: 0 auto;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--surface);
+  font-weight: 600;
+  pointer-events: none;
+  animation: fade-up 200ms ease-out both;
+}
+
+/* ---------- Small screens ---------- */
+
+/* Stats and tools on the first row, the roll controls full-width below. */
+@media (max-width: 720px) {
+  .topbar {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "hud tools" "controls controls";
+  }
+
+  .hud {
+    grid-area: hud;
+  }
+
+  .tools {
+    grid-area: tools;
+  }
+
+  .controls {
+    grid-area: controls;
+    margin-left: 0;
+  }
+
+  .controls .btn-primary {
+    flex: 1;
+  }
+}
+
+@media (max-width: 560px) {
+  .topbar {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .hud {
+    gap: 14px;
+  }
+
+  .hud-optional {
+    display: none !important;
+  }
 }

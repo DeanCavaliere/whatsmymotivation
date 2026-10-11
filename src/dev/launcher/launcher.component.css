@@ -1,0 +1,277 @@
+/* Builds on the app's tokens and .btn classes in styles.css; --accent and --felt come from the player's prefs. */
+:host {
+  display: block;
+  height: 100%;
+  overflow-y: auto;
+  padding: 28px 16px 64px;
+  font-size: 15px;
+  line-height: 1.45;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", monospace;
+}
+
+.wrap {
+  display: grid;
+  /* minmax(0, …) so the wide tables scroll inside their frames instead of widening the page. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 28px;
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+h1 {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 700;
+}
+
+h2 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+a.btn {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+code,
+kbd,
+.url {
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+
+code,
+kbd {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+
+kbd {
+  border: 1px solid var(--line);
+}
+
+/* ---------- Masthead: a strip of the player's felt ---------- */
+
+.masthead {
+  position: relative;
+  padding: 20px 22px;
+  border: 1px solid var(--chalk);
+  border-radius: 16px;
+  background: var(--felt);
+}
+
+.masthead p {
+  margin: 4px 0 0;
+  max-width: 68ch;
+  color: var(--ink);
+}
+
+.masthead .eyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.masthead-back {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(10, 10, 12, 0.55);
+}
+
+/* ---------- Builder ---------- */
+
+.builder {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-raised);
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.field span {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+select,
+input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+input.mono {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.builder-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.builder-url {
+  flex: 1 1 280px;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--accent-fill);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Tables ---------- */
+
+.lede {
+  margin: 0 0 10px;
+  max-width: 75ch;
+  color: var(--ink-muted);
+  font-size: 14px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-raised);
+}
+
+table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 9px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+thead th {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  border-bottom: 1px solid var(--line);
+}
+
+tbody tr + tr td {
+  border-top: 1px solid var(--line);
+}
+
+tbody tr:hover td {
+  background: var(--hover);
+}
+
+td.name {
+  width: 22%;
+  font-weight: 600;
+}
+
+td.name small {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+td.what {
+  color: var(--ink-muted);
+  font-size: 14px;
+}
+
+td.link {
+  width: 34%;
+}
+
+td.link a {
+  color: var(--accent);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+td.link a:hover {
+  text-decoration: underline;
+}
+
+td.copy {
+  width: 1%;
+}
+
+.notes {
+  margin: 0;
+  padding: 14px 18px 14px 34px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink-muted);
+  font-size: 14px;
+}
+
+.notes li + li {
+  margin-top: 5px;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  translate: -50% 0;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.toast.is-on {
+  opacity: 1;
+}
+
+@media (max-width: 560px) {
+  .masthead-back {
+    position: static;
+    margin-top: 12px;
+  }
+}

@@ -1,0 +1,89 @@
+<div class="wrap">
+  <header class="masthead">
+    <p class="eyebrow">Dev only</p>
+    <h1>Dev launcher</h1>
+    <p>Ready-made URLs for the dev server. Each link opens a new tab with a preset save, queued rolls, a table condition or a season. Click a URL to open it, or build your own mix below.</p>
+    <a class="btn btn-ghost btn-small masthead-back" href="/">Back to the table</a>
+  </header>
+
+  <section class="group" aria-labelledby="notes-title">
+    <h2 id="notes-title">How the params behave</h2>
+    <ul class="notes">
+      <li><code>?save=</code> replaces your save on <em>every</em> load, so refreshing gives you the same day to roll again. <code>?save=mine</code> puts your own save back.</li>
+      <li><code>?rolls=</code> queues results in local storage, one per throw, and they stay until used. Leftovers carry into the next tab, which is how a stray 20 shows up later. The 3D die still lands on a random face; only the result is replaced.</li>
+      <li>Queued rolls are clamped to your die (a 20 on a d6 becomes 6), and with advantage or disadvantage both dice show the queued value.</li>
+      <li><code>?condition=</code> and <code>?season=</code> only last while they're in the URL. A season can't be switched off by URL; turn off seasonal tables in Settings for that.</li>
+      <li>On the table, press <kbd>`</kbd> or tap the Dev chip in the corner to come back here. None of this exists in production builds.</li>
+    </ul>
+  </section>
+
+  <section class="builder" aria-labelledby="builder-title">
+    <h2 id="builder-title">Build a URL</h2>
+    @let b = builder();
+    <div class="fields">
+      <label class="field">
+        <span>Save</span>
+        <select (change)="set('save', $any($event.target).value)">
+          @for (o of saveOptions; track o.value) {
+            <option [value]="o.value" [selected]="(b.save ?? '') === o.value">{{ o.label }}</option>
+          }
+        </select>
+      </label>
+      <label class="field">
+        <span>Rolls</span>
+        <input class="mono" type="text" placeholder="e.g. 20 or 1,20" spellcheck="false" autocomplete="off"
+          [value]="b.rolls ?? ''" (input)="set('rolls', $any($event.target).value)">
+      </label>
+      <label class="field">
+        <span>Condition</span>
+        <select (change)="set('condition', $any($event.target).value)">
+          @for (o of conditionOptions; track o.value) {
+            <option [value]="o.value" [selected]="(b.condition ?? '') === o.value">{{ o.label }}</option>
+          }
+        </select>
+      </label>
+      <label class="field">
+        <span>Season</span>
+        <select (change)="set('season', $any($event.target).value)">
+          @for (o of seasonOptions; track o.value) {
+            <option [value]="o.value" [selected]="(b.season ?? '') === o.value">{{ o.label }}</option>
+          }
+        </select>
+      </label>
+    </div>
+    <div class="builder-result">
+      <output class="url builder-url">{{ builderUrl() }}</output>
+      <a class="btn btn-primary" [href]="builderUrl()" target="_blank" rel="noopener">Open tab</a>
+      <button class="btn btn-ghost" type="button" (click)="copy(builderUrl())">Copy</button>
+    </div>
+  </section>
+
+  @for (g of groups; track g.title; let gi = $index) {
+    <section class="group" [attr.aria-labelledby]="'group-' + gi">
+      <h2 [id]="'group-' + gi">{{ g.title }}</h2>
+      <p class="lede">{{ g.lede }}</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Preview</th><th>What you'll see</th><th>URL</th><th><span class="visually-hidden">Copy</span></th></tr>
+          </thead>
+          <tbody>
+            @for (p of g.rows; track p.name) {
+              <tr>
+                <td class="name">{{ p.name }}@if (p.sub) {<small>{{ p.sub }}</small>}</td>
+                <td class="what">{{ p.what }}</td>
+                <td class="link"><a class="url" [href]="url(p.params)" target="_blank" rel="noopener">{{ path(p.params) }}</a></td>
+                <td class="copy">
+                  <button class="btn btn-ghost btn-small" type="button" [attr.aria-label]="'Copy URL for ' + p.name"
+                    (click)="copy(url(p.params))">Copy</button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+</div>
+
+<div class="toast" role="status" [class.is-on]="toast()">{{ toast() }}</div>

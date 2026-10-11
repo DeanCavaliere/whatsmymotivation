@@ -1,14 +1,21 @@
-import {Observable, Subject} from "rxjs";
+import {Injectable} from '@angular/core';
+import {Subject} from 'rxjs';
 
+/** Both fly out from a point; the big one is for a natural top face. */
+export type ConfettiKind = 'burst' | 'big-burst';
+
+export interface ConfettiTrigger {
+  kind: ConfettiKind;
+  /** Where a burst starts, in viewport pixels. Defaults to the middle of the screen. */
+  origin?: { x: number; y: number };
+}
+
+@Injectable({providedIn: 'root'})
 export class ConfettiService {
-  private triggerConfettiSubject = new Subject<string[]>();
-  public triggerConfettiObservable = new Observable<string[]>();
+  private triggerSubject = new Subject<ConfettiTrigger>();
+  readonly trigger$ = this.triggerSubject.asObservable();
 
-  constructor() {
-    this.triggerConfettiObservable = this.triggerConfettiSubject.asObservable()
-  }
-
-  public triggerConfetti(fileNames: ('red_confetti.png' | 'yellow_confetti.png' | 'blue_confetti.png' | 'green_confetti.png' | "crying_emoji.png")[]): void {
-    this.triggerConfettiSubject.next(fileNames);
+  trigger(kind: ConfettiKind, origin?: { x: number; y: number }): void {
+    this.triggerSubject.next({kind, origin});
   }
 }
