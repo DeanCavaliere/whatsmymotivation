@@ -1,6 +1,9 @@
-import {Injectable, NgZone} from '@angular/core';
+import {Injectable, isDevMode, NgZone} from '@angular/core';
 import DiceBox from '@3d-dice/dice-box';
 import {diceNotation, DieSides, randomFace, RollMode} from './motivation';
+
+/** Dev builds only: results queued with ?rolls=20,1 replace the next rolls, to preview effects. */
+const DEV_ROLLS_KEY = 'wmm.dev.rolls';
 
 /** A roll should settle in a few seconds; past this we stop waiting on the 3D dice. */
 const ROLL_TIMEOUT_MS = 15000;
@@ -17,6 +20,12 @@ export class DiceService {
   renderer: DiceRenderer = 'fallback';
 
   constructor(private zone: NgZone) {
+    if (isDevMode()) {
+      const queued = new URLSearchParams(location.search).get('rolls');
+      if (queued !== null) {
+        localStorage.setItem(DEV_ROLLS_KEY, queued);
+      }
+    }
   }
 
   async init(container: HTMLElement): Promise<DiceRenderer> {
@@ -56,6 +65,12 @@ export class DiceService {
 
   /** Resolves with every die's value (one for normal, two for advantage/disadvantage). */
   async roll(mode: RollMode, sides: DieSides = 20, themeColor?: string): Promise<number[]> {
+    const values = await this.throwDice(mode, sides, themeColor);
+    const forced = isDevMode() ? takeQueuedRoll(sides) : null;
+    return forced === null ? values : values.map(() => forced);
+  }
+
+  private async throwDice(mode: RollMode, sides: DieSides, themeColor?: string): Promise<number[]> {
     const count = mode === 'normal' ? 1 : 2;
     const fallback = () => Array.from({length: count}, () => randomFace(sides));
 
@@ -74,6 +89,21 @@ export class DiceService {
       return fallback();
     }
     return values;
+  }
+}
+
+/** The next queued dev roll, clamped to the die. Every die in the throw shows it. */
+function takeQueuedRoll(sides: DieSides): number | null {
+  try {
+    const queue = (localStorage.getItem(DEV_ROLLS_KEY) ?? '').split(',').map(Number).filter(n => n >= 1);
+    if (!queue.length) {
+      return null;
+    }
+    const [next, ...rest] = queue;
+    rest.length ? localStorage.setItem(DEV_ROLLS_KEY, rest.join(',')) : localStorage.removeItem(DEV_ROLLS_KEY);
+    return Math.min(next, sides);
+  } catch {
+    return null;
   }
 }
 
