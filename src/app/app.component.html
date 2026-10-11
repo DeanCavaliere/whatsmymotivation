@@ -106,6 +106,12 @@
         @if (r.isToday && r.streak > 1) {
           <p class="result-streak">{{ r.streak }}-day streak{{ r.newBest ? ' · new best!' : '' }}</p>
         }
+        @if (r.badges.length) {
+          <p class="result-badge">
+            <span class="result-badge-icon" aria-hidden="true">{{ r.badges[0].icon }}</span>
+            <span><small>{{ r.badges.length === 1 ? 'Badge unlocked' : r.badges.length + ' badges unlocked' }}</small>{{ badgeNames(r.badges) }}</span>
+          </p>
+        }
         <div class="result-actions">
           <button type="button" class="btn btn-ghost btn-small" (click)="share()">Share</button>
           @if (r.isToday && canNudge) {
@@ -147,220 +153,245 @@
       <button type="button" role="tab" id="tab-all" aria-controls="stats-panel"
         [attr.aria-selected]="statsTab === 'all'" [tabIndex]="statsTab === 'all' ? 0 : -1"
         (click)="setStatsTab('all')" (keydown)="onTabKey($event)">All rolls</button>
+      <button type="button" role="tab" id="tab-badges" aria-controls="stats-panel"
+        [attr.aria-selected]="statsTab === 'badges'" [tabIndex]="statsTab === 'badges' ? 0 : -1"
+        (click)="setStatsTab('badges')" (keydown)="onTabKey($event)">Badges</button>
     </div>
 
     <div id="stats-panel" role="tabpanel" tabindex="0" [attr.aria-labelledby]="'tab-' + statsTab">
-      @if (statsTab === 'daily') {
-        <p class="panel-note">Only your first roll each day counts here. That one is the day's motivation.</p>
-        <dl class="tiles">
-          <div>
-            <dt>Today's roll</dt>
-            <dd [attr.data-tier]="today ? tierOf(today.value, today.sides) : null">
-              {{ today ? today.value : '—' }}@if (today && today.sides !== 20) {<small class="die-tag">on d{{ today.sides }}</small>}
-            </dd>
-          </div>
-          <div>
-            <dt>Day streak</dt>
-            <dd>{{ streak }}</dd>
-          </div>
-          <div>
-            <dt>Best streak</dt>
-            <dd>{{ stats.streak.best }}</dd>
-          </div>
-          <div>
-            <dt>Days rolled</dt>
-            <dd>{{ daysRolled }}</dd>
-          </div>
-        </dl>
-
-        @if (calendar; as cal) {
-          <section class="calendar" aria-labelledby="calendar-title">
-            <div class="calendar-head">
-              <div>
-                <h3 id="calendar-title">{{ dateFromKey(calendarDay) | date:'MMMM y' }}</h3>
-                <p class="calendar-summary">
-                  <strong>{{ cal.rolled }}</strong> {{ cal.rolled === 1 ? 'day' : 'days' }} rolled
-                  @if (cal.average !== null) {
-                    · average <strong>{{ cal.average | number:'1.1-1' }}</strong>{{ cal.averageSides === 20 ? '' : ' on the d' + cal.averageSides }}
-                  }
-                  · <strong>{{ cal.crits }}</strong> {{ cal.crits === 1 ? 'crit' : 'crits' }}
-                </p>
-              </div>
-              <div class="calendar-nav">
-                <button type="button" class="btn btn-ghost btn-icon" aria-label="Previous month"
-                  [disabled]="!canShiftCalendar(-1)" (click)="shiftCalendar(-1)"><span aria-hidden="true">‹</span></button>
-                <button type="button" class="btn btn-ghost btn-icon" aria-label="Next month"
-                  [disabled]="!canShiftCalendar(1)" (click)="shiftCalendar(1)"><span aria-hidden="true">›</span></button>
-              </div>
-            </div>
-            <div class="calendar-grid" role="group" aria-labelledby="calendar-title">
-              @for (w of weekdays; track $index) {
-                <span class="calendar-dow" aria-hidden="true">{{ w }}</span>
-              }
-              @for (d of cal.days; track d.date) {
-                <button type="button" class="calendar-day" [id]="'day-' + d.date" [attr.data-tier]="d.tier"
-                  [class.is-empty]="!d.roll" [class.is-today]="d.isToday"
-                  [style.grid-column-start]="$first ? cal.leading + 1 : null"
-                  [disabled]="d.isFuture" [attr.aria-pressed]="d.date === calendarDay"
-                  [tabIndex]="d.date === calendarDay ? 0 : -1" [attr.aria-label]="calendarDayLabel(d)"
-                  (click)="selectCalendarDay(d.date)" (keydown)="onCalendarKey($event)">
-                  <span class="calendar-date" aria-hidden="true">{{ d.day }}</span>
-                  @if (d.roll; as r) {
-                    <span class="calendar-value" aria-hidden="true">{{ r.value }}</span>
-                    @if (d.tier === 'crit-success') {
-                      <span class="calendar-mark" aria-hidden="true">★</span>
-                    } @else if (d.tier === 'crit-fail') {
-                      <svg class="calendar-mark calendar-crack" viewBox="0 0 12 12" aria-hidden="true"><path d="M1 2 L5 6 L3.5 7.5 L8 11 M5 6 L9 3.5 L11 4.5"/></svg>
-                    }
-                    @if (r.nudgedFrom) {
-                      <span class="calendar-nudge" aria-hidden="true">↻</span>
-                    }
-                  }
-                </button>
-              }
-            </div>
-            <ul class="calendar-legend" aria-hidden="true">
-              <li>Worse
-                <span class="calendar-ramp">
-                  @for (t of ['crit-fail', 'very-low', 'low', 'mid', 'high', 'very-high', 'crit-success']; track t) {
-                    <i [attr.data-tier]="t"></i>
-                  }
-                </span>
-                Better</li>
-              <li>★ Natural top face</li>
-              <li><svg class="calendar-crack" viewBox="0 0 12 12"><path d="M1 2 L5 6 L3.5 7.5 L8 11 M5 6 L9 3.5 L11 4.5"/></svg> Natural 1</li>
-              <li>↻ Nudged</li>
-            </ul>
-            <div class="calendar-details" [attr.data-tier]="calendarRoll ? tierOf(calendarRoll.value, calendarRoll.sides) : null">
-              <h4>{{ dateFromKey(calendarDay) | date:'EEEE, MMMM d' }}</h4>
-              @if (calendarRoll; as r) {
-                <p class="calendar-details-roll">Rolled <strong>{{ r.value }}</strong> on the d{{ r.sides }}{{ r.mode === 'normal' ? '' : ' with ' + r.mode }}</p>
-                @if (r.nudgedFrom; as from) {
-                  <p>Nudged from a {{ from.value }}{{ from.sides === r.sides ? '' : ' on the d' + from.sides }}.</p>
+      @if (statsTab === 'badges') {
+        <p class="badge-count"><strong>{{ badgeCount }}</strong> of {{ badgeList.length }} badges earned</p>
+        <div class="progress" aria-hidden="true"><i [style.width.%]="badgeCount / badgeList.length * 100"></i></div>
+        <ul class="badges">
+          @for (b of badgeList; track b.badge.id) {
+            <li class="badge" [class.is-locked]="!b.earned">
+              <span class="badge-medal" aria-hidden="true">{{ b.badge.icon }}</span>
+              <span class="badge-text">
+                <strong>{{ b.badge.name }}<span class="visually-hidden">{{ b.earned ? ', earned' : ', not earned yet' }}</span></strong>
+                <span>{{ b.badge.description }}</span>
+                @if (b.earned) {
+                  <span class="badge-when">Earned {{ dateFromKey(b.earned) | date:'MMM d, y' }}</span>
+                } @else if (b.progress; as pr) {
+                  <span class="badge-progress">{{ pr.current | number }} of {{ pr.goal | number }} {{ pr.unit }}</span>
+                  <span class="progress" aria-hidden="true"><i [style.width.%]="pr.current / pr.goal * 100"></i></span>
                 }
-              } @else {
-                <p>No roll this day.</p>
-              }
-            </div>
-          </section>
-        }
+              </span>
+            </li>
+          }
+        </ul>
       } @else {
-        <p class="panel-note">Every roll, re-rolls included.</p>
-        <dl class="tiles">
-          <div>
-            <dt>Lifetime rolls</dt>
-            <dd>{{ stats.lifetimeRolls }}</dd>
-          </div>
-          <div>
-            <dt>This session</dt>
-            <dd>{{ sessionRolls }}</dd>
-          </div>
-          <div title="Rolled the die's highest face">
-            <dt>Crits</dt>
-            <dd>{{ totals.crits }}</dd>
-          </div>
-          <div title="Rolled a 1">
-            <dt>Crit fails</dt>
-            <dd>{{ totals.critFails }}</dd>
-          </div>
-        </dl>
-      }
-
-      @if (statsView.die; as die) {
-        <div class="chart-header">
-          <h3 id="chart-title">Roll distribution</h3>
-          @if (statsView.dice.length > 1) {
-            <div class="segmented segmented-small" role="group" aria-label="Die to chart">
-              @for (d of statsView.dice; track d.sides) {
-                <button type="button" [attr.aria-pressed]="d.sides === die.sides"
-                  (click)="setChartSides(d.sides)">d{{ d.sides }}</button>
-              }
-            </div>
-          }
-        </div>
-        <svg class="chart" [attr.viewBox]="'0 -4 ' + chart.width + ' ' + (chart.height + 22)" aria-hidden="true"
-          (mouseleave)="hoveredBar = null">
-          <line class="chart-baseline" [attr.x1]="statsView.bars[0].x" [attr.y1]="chart.height" [attr.y2]="chart.height"
-            [attr.x2]="statsView.bars[statsView.bars.length - 1].x + statsView.bars[statsView.bars.length - 1].width"/>
-          @for (bar of statsView.bars; track bar.face) {
-            <g>
-              <rect class="chart-bar" [class.is-hovered]="hoveredBar === bar"
-                [attr.x]="bar.x" [attr.y]="bar.y" [attr.width]="bar.width" [attr.height]="bar.height"
-                rx="3"/>
-              <!-- Taller-than-the-mark hit target -->
-              <rect class="chart-hit" [attr.x]="bar.x - chart.gap / 2" y="0" [attr.width]="bar.width + chart.gap"
-                [attr.height]="chart.height + 22" (mouseenter)="hoveredBar = bar">
-                <title>{{ bar.face }}: rolled {{ bar.count }} {{ bar.count === 1 ? 'time' : 'times' }}</title>
-              </rect>
-              @if (bar.labeled) {
-                <text class="chart-tick"
-                [attr.x]="bar.x + bar.width / 2" [attr.y]="chart.height + 16">{{ bar.face }}</text>
-              }
-            </g>
-          }
-        </svg>
-        <table class="visually-hidden" aria-labelledby="chart-title">
-          <thead>
-            <tr><th scope="col">Face of the d{{ die.sides }}</th><th scope="col">Times rolled</th></tr>
-          </thead>
-          <tbody>
-            @for (bar of statsView.bars; track bar.face) {
-              <tr><th scope="row">{{ bar.face }}</th><td>{{ bar.count }}</td></tr>
-            }
-          </tbody>
-        </table>
-        <p class="chart-readout" aria-hidden="true">
-          @if (hoveredBar) {
-            Rolled a <strong>{{ hoveredBar.face }}</strong> {{ hoveredBar.count }} {{ hoveredBar.count === 1 ? 'time' : 'times' }}
-            ({{ hoveredBar.count / die.rolls | percent }})
-          } @else {
-            Average <strong>{{ die.average | number:'1.1-1' }}</strong> across {{ die.rolls }}
-            {{ statsTab === 'daily' ? (die.rolls === 1 ? 'day' : 'days') : (die.rolls === 1 ? 'roll' : 'rolls') }}
-            on the d{{ die.sides }}. Hover a bar for details.
-          }
-        </p>
-        <p class="visually-hidden">Average {{ die.average | number:'1.1-1' }} on the d{{ die.sides }}.</p>
-      }
-
-      @if (statsTab === 'daily') {
-        @if (prefs.nudge || stats.nudges.used) {
-          <h3 id="nudges-title">Nudges</h3>
-          <dl class="tiles" aria-labelledby="nudges-title">
+        @if (statsTab === 'daily') {
+          <p class="panel-note">Only your first roll each day counts here. That one is the day's motivation.</p>
+          <dl class="tiles">
             <div>
-              <dt>Used</dt>
-              <dd>{{ stats.nudges.used }}</dd>
-            </div>
-            <div title="Landed higher than the roll it replaced">
-              <dt>Helped</dt>
-              <dd>{{ stats.nudges.better }}</dd>
-            </div>
-            <div title="Landed lower than the roll it replaced">
-              <dt>Backfired</dt>
-              <dd>{{ stats.nudges.worse }}</dd>
+              <dt>Today's roll</dt>
+              <dd [attr.data-tier]="today ? tierOf(today.value, today.sides) : null">
+                {{ today ? today.value : '—' }}@if (today && today.sides !== 20) {<small class="die-tag">on d{{ today.sides }}</small>}
+              </dd>
             </div>
             <div>
-              <dt>Next nudge</dt>
-              <dd class="tile-text">{{ nudgeUsed ? 'Sunday' : 'Ready' }}</dd>
+              <dt>Day streak</dt>
+              <dd>{{ streak }}</dd>
+            </div>
+            <div>
+              <dt>Best streak</dt>
+              <dd>{{ stats.streak.best }}</dd>
+            </div>
+            <div>
+              <dt>Days rolled</dt>
+              <dd>{{ daysRolled }}</dd>
+            </div>
+          </dl>
+
+          @if (calendar; as cal) {
+            <section class="calendar" aria-labelledby="calendar-title">
+              <div class="calendar-head">
+                <div>
+                  <h3 id="calendar-title">{{ dateFromKey(calendarDay) | date:'MMMM y' }}</h3>
+                  <p class="calendar-summary">
+                    <strong>{{ cal.rolled }}</strong> {{ cal.rolled === 1 ? 'day' : 'days' }} rolled
+                    @if (cal.average !== null) {
+                      · average <strong>{{ cal.average | number:'1.1-1' }}</strong>{{ cal.averageSides === 20 ? '' : ' on the d' + cal.averageSides }}
+                    }
+                    · <strong>{{ cal.crits }}</strong> {{ cal.crits === 1 ? 'crit' : 'crits' }}
+                  </p>
+                </div>
+                <div class="calendar-nav">
+                  <button type="button" class="btn btn-ghost btn-icon" aria-label="Previous month"
+                    [disabled]="!canShiftCalendar(-1)" (click)="shiftCalendar(-1)"><span aria-hidden="true">‹</span></button>
+                  <button type="button" class="btn btn-ghost btn-icon" aria-label="Next month"
+                    [disabled]="!canShiftCalendar(1)" (click)="shiftCalendar(1)"><span aria-hidden="true">›</span></button>
+                </div>
+              </div>
+              <div class="calendar-grid" role="group" aria-labelledby="calendar-title">
+                @for (w of weekdays; track $index) {
+                  <span class="calendar-dow" aria-hidden="true">{{ w }}</span>
+                }
+                @for (d of cal.days; track d.date) {
+                  <button type="button" class="calendar-day" [id]="'day-' + d.date" [attr.data-tier]="d.tier"
+                    [class.is-empty]="!d.roll" [class.is-today]="d.isToday"
+                    [style.grid-column-start]="$first ? cal.leading + 1 : null"
+                    [disabled]="d.isFuture" [attr.aria-pressed]="d.date === calendarDay"
+                    [tabIndex]="d.date === calendarDay ? 0 : -1" [attr.aria-label]="calendarDayLabel(d)"
+                    (click)="selectCalendarDay(d.date)" (keydown)="onCalendarKey($event)">
+                    <span class="calendar-date" aria-hidden="true">{{ d.day }}</span>
+                    @if (d.roll; as r) {
+                      <span class="calendar-value" aria-hidden="true">{{ r.value }}</span>
+                      @if (d.tier === 'crit-success') {
+                        <span class="calendar-mark" aria-hidden="true">★</span>
+                      } @else if (d.tier === 'crit-fail') {
+                        <svg class="calendar-mark calendar-crack" viewBox="0 0 12 12" aria-hidden="true"><path d="M1 2 L5 6 L3.5 7.5 L8 11 M5 6 L9 3.5 L11 4.5"/></svg>
+                      }
+                      @if (r.nudgedFrom) {
+                        <span class="calendar-nudge" aria-hidden="true">↻</span>
+                      }
+                    }
+                  </button>
+                }
+              </div>
+              <ul class="calendar-legend" aria-hidden="true">
+                <li>Worse
+                  <span class="calendar-ramp">
+                    @for (t of ['crit-fail', 'very-low', 'low', 'mid', 'high', 'very-high', 'crit-success']; track t) {
+                      <i [attr.data-tier]="t"></i>
+                    }
+                  </span>
+                  Better</li>
+                <li>★ Natural top face</li>
+                <li><svg class="calendar-crack" viewBox="0 0 12 12"><path d="M1 2 L5 6 L3.5 7.5 L8 11 M5 6 L9 3.5 L11 4.5"/></svg> Natural 1</li>
+                <li>↻ Nudged</li>
+              </ul>
+              <div class="calendar-details" [attr.data-tier]="calendarRoll ? tierOf(calendarRoll.value, calendarRoll.sides) : null">
+                <h4>{{ dateFromKey(calendarDay) | date:'EEEE, MMMM d' }}</h4>
+                @if (calendarRoll; as r) {
+                  <p class="calendar-details-roll">Rolled <strong>{{ r.value }}</strong> on the d{{ r.sides }}{{ r.mode === 'normal' ? '' : ' with ' + r.mode }}</p>
+                  @if (r.nudgedFrom; as from) {
+                    <p>Nudged from a {{ from.value }}{{ from.sides === r.sides ? '' : ' on the d' + from.sides }}.</p>
+                  }
+                } @else {
+                  <p>No roll this day.</p>
+                }
+              </div>
+            </section>
+          }
+        } @else {
+          <p class="panel-note">Every roll, re-rolls included.</p>
+          <dl class="tiles">
+            <div>
+              <dt>Lifetime rolls</dt>
+              <dd>{{ stats.lifetimeRolls }}</dd>
+            </div>
+            <div>
+              <dt>This session</dt>
+              <dd>{{ sessionRolls }}</dd>
+            </div>
+            <div title="Rolled the die's highest face">
+              <dt>Crits</dt>
+              <dd>{{ totals.crits }}</dd>
+            </div>
+            <div title="Rolled a 1">
+              <dt>Crit fails</dt>
+              <dd>{{ totals.critFails }}</dd>
             </div>
           </dl>
         }
-      } @else {
-        @if (stats.history.length) {
-          <h3 id="recent-rolls-title">Recent rolls</h3>
-          <ol class="history" aria-labelledby="recent-rolls-title">
-            @for (h of stats.history; track $index) {
-              <li [attr.data-tier]="tierOf(h.value, h.sides)"
-                [title]="(h.at | date:'medium') + (h.mode === 'normal' ? '' : ' · ' + h.mode) + (h.nudge ? ' · nudge' : '')">
-                <span>{{ h.value }}</span>
-                @if (h.sides !== 20) {
-                  <span class="history-date">d{{ h.sides }}</span>
+
+        @if (statsView.die; as die) {
+          <div class="chart-header">
+            <h3 id="chart-title">Roll distribution</h3>
+            @if (statsView.dice.length > 1) {
+              <div class="segmented segmented-small" role="group" aria-label="Die to chart">
+                @for (d of statsView.dice; track d.sides) {
+                  <button type="button" [attr.aria-pressed]="d.sides === die.sides"
+                    (click)="setChartSides(d.sides)">d{{ d.sides }}</button>
                 }
-                <span class="visually-hidden">, {{ h.at | date:'medium' }}{{ h.mode === 'normal' ? '' : ', ' + h.mode }}{{ h.nudge ? ', nudge' : '' }}</span>
-              </li>
+              </div>
             }
-          </ol>
+          </div>
+          <svg class="chart" [attr.viewBox]="'0 -4 ' + chart.width + ' ' + (chart.height + 22)" aria-hidden="true"
+            (mouseleave)="hoveredBar = null">
+            <line class="chart-baseline" [attr.x1]="statsView.bars[0].x" [attr.y1]="chart.height" [attr.y2]="chart.height"
+              [attr.x2]="statsView.bars[statsView.bars.length - 1].x + statsView.bars[statsView.bars.length - 1].width"/>
+            @for (bar of statsView.bars; track bar.face) {
+              <g>
+                <rect class="chart-bar" [class.is-hovered]="hoveredBar === bar"
+                  [attr.x]="bar.x" [attr.y]="bar.y" [attr.width]="bar.width" [attr.height]="bar.height"
+                  rx="3"/>
+                <!-- Taller-than-the-mark hit target -->
+                <rect class="chart-hit" [attr.x]="bar.x - chart.gap / 2" y="0" [attr.width]="bar.width + chart.gap"
+                  [attr.height]="chart.height + 22" (mouseenter)="hoveredBar = bar">
+                  <title>{{ bar.face }}: rolled {{ bar.count }} {{ bar.count === 1 ? 'time' : 'times' }}</title>
+                </rect>
+                @if (bar.labeled) {
+                  <text class="chart-tick"
+                  [attr.x]="bar.x + bar.width / 2" [attr.y]="chart.height + 16">{{ bar.face }}</text>
+                }
+              </g>
+            }
+          </svg>
+          <table class="visually-hidden" aria-labelledby="chart-title">
+            <thead>
+              <tr><th scope="col">Face of the d{{ die.sides }}</th><th scope="col">Times rolled</th></tr>
+            </thead>
+            <tbody>
+              @for (bar of statsView.bars; track bar.face) {
+                <tr><th scope="row">{{ bar.face }}</th><td>{{ bar.count }}</td></tr>
+              }
+            </tbody>
+          </table>
+          <p class="chart-readout" aria-hidden="true">
+            @if (hoveredBar) {
+              Rolled a <strong>{{ hoveredBar.face }}</strong> {{ hoveredBar.count }} {{ hoveredBar.count === 1 ? 'time' : 'times' }}
+              ({{ hoveredBar.count / die.rolls | percent }})
+            } @else {
+              Average <strong>{{ die.average | number:'1.1-1' }}</strong> across {{ die.rolls }}
+              {{ statsTab === 'daily' ? (die.rolls === 1 ? 'day' : 'days') : (die.rolls === 1 ? 'roll' : 'rolls') }}
+              on the d{{ die.sides }}. Hover a bar for details.
+            }
+          </p>
+          <p class="visually-hidden">Average {{ die.average | number:'1.1-1' }} on the d{{ die.sides }}.</p>
+        }
+
+        @if (statsTab === 'daily') {
+          @if (prefs.nudge || stats.nudges.used) {
+            <h3 id="nudges-title">Nudges</h3>
+            <dl class="tiles" aria-labelledby="nudges-title">
+              <div>
+                <dt>Used</dt>
+                <dd>{{ stats.nudges.used }}</dd>
+              </div>
+              <div title="Landed higher than the roll it replaced">
+                <dt>Helped</dt>
+                <dd>{{ stats.nudges.better }}</dd>
+              </div>
+              <div title="Landed lower than the roll it replaced">
+                <dt>Backfired</dt>
+                <dd>{{ stats.nudges.worse }}</dd>
+              </div>
+              <div>
+                <dt>Next nudge</dt>
+                <dd class="tile-text">{{ nudgeUsed ? 'Sunday' : 'Ready' }}</dd>
+              </div>
+            </dl>
+          }
         } @else {
-          <p class="empty">No tracked rolls yet. Close this and roll the die!</p>
+          @if (stats.history.length) {
+            <h3 id="recent-rolls-title">Recent rolls</h3>
+            <ol class="history" aria-labelledby="recent-rolls-title">
+              @for (h of stats.history; track $index) {
+                <li [attr.data-tier]="tierOf(h.value, h.sides)"
+                  [title]="(h.at | date:'medium') + (h.mode === 'normal' ? '' : ' · ' + h.mode) + (h.nudge ? ' · nudge' : '')">
+                  <span>{{ h.value }}</span>
+                  @if (h.sides !== 20) {
+                    <span class="history-date">d{{ h.sides }}</span>
+                  }
+                  <span class="visually-hidden">, {{ h.at | date:'medium' }}{{ h.mode === 'normal' ? '' : ', ' + h.mode }}{{ h.nudge ? ', nudge' : '' }}</span>
+                </li>
+              }
+            </ol>
+          } @else {
+            <p class="empty">No tracked rolls yet. Close this and roll the die!</p>
+          }
         }
       }
     </div>

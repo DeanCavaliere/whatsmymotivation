@@ -3,6 +3,7 @@ import {DatePipe, DecimalPipe, PercentPipe} from '@angular/common';
 import {SwUpdate} from '@angular/service-worker';
 import {ConfettiComponent} from './components/confetti/confetti.component';
 import {ConfettiService} from './components/confetti/confetti.service';
+import {Badge, BADGES, newBadges, Progress} from './achievements';
 import {CalendarDay, CalendarMonth, calendarMonth, earliestMonth, shiftMonth} from './calendar';
 import {CrackPath, crackPaths} from './crack';
 import {activeSeason, Season, seasonKey, SEASONS} from './seasons';
@@ -53,6 +54,15 @@ interface RollResult {
   /** Streak length after this roll, when it was today's roll. */
   streak: number;
   newBest: boolean;
+  /** Badges this roll unlocked. */
+  badges: Badge[];
+}
+
+interface BadgeView {
+  badge: Badge;
+  /** The date it was earned, YYYY-MM-DD. */
+  earned: string | null;
+  progress: Progress | null;
 }
 
 interface ChartBar {
@@ -66,7 +76,9 @@ interface ChartBar {
   labeled: boolean;
 }
 
-export type StatsTab = 'daily' | 'all';
+export type StatsTab = 'daily' | 'all' | 'badges';
+
+const STATS_TABS: readonly StatsTab[] = ['daily', 'all', 'badges'];
 
 interface StatsView {
   /** Dice with rolls in the current tab. */
@@ -157,6 +169,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   calendar: CalendarMonth | null = null;
   calendarDay = localDateKey(new Date());
   readonly weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  badgeList: BadgeView[] = [];
+  badgeCount = 0;
   hoveredBar: ChartBar | null = null;
   confirmingReset = false;
   prefs: Prefs;
@@ -202,6 +216,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         nudgedFrom: today.nudgedFrom ?? null,
         streak: this.streak,
         newBest: false,
+        badges: [],
       };
     }
     this.refreshCrack();
@@ -310,6 +325,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         return;
       }
       this.sessionRolls++;
+      const badges = newBadges(this.stats, {
+        values, value, sides, mode, isDayRoll: nudge || !before, date: localDateKey(new Date()),
+      });
+      if (badges.length) {
+        this.stats = this.statsService.award(badges.map(b => b.id));
+      }
       this.refreshDerived();
 
       const verdict = verdictFor(value, sides, Math.random, this.season?.messages);
@@ -323,6 +344,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         nudgedFrom: nudge && before ? {value: before.value, sides: before.sides} : null,
         streak: this.streak,
         newBest: !nudge && !before && this.streak > 1 && this.streak > previousBest,
+        badges,
       };
       this.announcement = announce(this.result, this.resultLabel(this.result, ', '));
       this.refreshCrack();
@@ -395,7 +417,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       return;
     }
     event.preventDefault();
-    this.setStatsTab(this.statsTab === 'daily' ? 'all' : 'daily');
+    const step = event.key === 'ArrowRight' ? 1 : -1;
+    this.setStatsTab(STATS_TABS[(STATS_TABS.indexOf(this.statsTab) + step + STATS_TABS.length) % STATS_TABS.length]);
     document.getElementById(`tab-${this.statsTab}`)?.focus();
   }
 
@@ -446,6 +469,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       return;
     }
     setTimeout(() => document.getElementById('day-' + this.calendarDay)?.focus());
+  }
+
+  /** "Natural" or "On a roll and Collector" */
+  badgeNames(badges: readonly Badge[]): string {
+    const names = badges.map(b => b.name);
+    return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0] ?? '';
   }
 
   get calendarRoll(): DayRoll | null {
@@ -596,6 +625,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.hoveredBar = null;
     const [year, month] = this.calendarDay.split('-').map(Number);
     this.calendar = this.statsTab === 'daily' ? calendarMonth(this.stats.days, year, month - 1) : null;
+    this.badgeList = BADGES.map(badge => ({
+      badge,
+      earned: this.stats.achievements[badge.id] ?? null,
+      progress: badge.progress?.(this.stats) ?? null,
+    }));
+    this.badgeCount = this.badgeList.filter(b => b.earned).length;
   }
 
   /** Shows the crack while a natural 1 is on the table or is the day's roll. */
@@ -627,6 +662,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   /** Runs after the result renders, so effects can start from the number. */
   private celebrate(celebration: Celebration): void {
     this.sound.landed(celebration);
+    if (this.result?.badges.length) {
+      // After the fanfare or trombone, if there is one.
+      this.sound.badgeUnlocked(celebration === 'big-burst' || celebration === 'crack' ? 1.8 : 0.3);
+    }
     if (celebration === 'crack' && !this.reducedMotion?.matches) {
       this.crackFresh = true;
       this.tableJolted = this.tableDrained = true;
@@ -664,17 +703,20 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 }
 
-/** Bars for each face, centered, and at most `maxBarWidth` wide so a d4 doesn't look like a wall. */
+/** The live-region text for a roll: the result, the message, the streak and any badges. */
 function announce(r: RollResult, label: string): string {
+  const badges = r.badges.map(b => b.name);
   return [
     `${label}: ${r.value}.`,
     r.dropped === null ? '' : `Dropped ${r.dropped}.`,
     r.nudgedFrom ? `Was ${r.nudgedFrom.value}.` : '',
     r.verdict.message,
     r.isToday && r.streak > 1 ? `${r.streak}-day streak${r.newBest ? ', a new best!' : '.'}` : '',
+    badges.length ? `${badges.length === 1 ? 'Badge' : 'Badges'} unlocked: ${badges.join(', ')}.` : '',
   ].filter(Boolean).join(' ');
 }
 
+/** Bars for each face, centered, and at most `maxBarWidth` wide so a d4 doesn't look like a wall. */
 function chartBars(faces: number[]): ChartBar[] {
   const {width, height, gap, maxBarWidth} = CHART;
   const n = faces.length;

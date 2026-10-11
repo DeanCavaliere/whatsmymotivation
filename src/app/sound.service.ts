@@ -79,10 +79,11 @@ export class SoundService {
     this.vibrate(celebration === 'big-burst' || celebration === 'crack' ? celebration : 'land');
   }
 
-  badgeUnlocked(): void {
+  /** `delay` (seconds) lets the tick wait for a crit's fanfare to finish. */
+  badgeUnlocked(delay = 0): void {
     const ctx = this.context();
     if (ctx) {
-      this.zone.runOutsideAngular(() => tick(ctx, masterGain(ctx), ctx.currentTime + 0.03));
+      this.zone.runOutsideAngular(() => tick(ctx, masterGain(ctx), ctx.currentTime + 0.03 + delay));
     }
   }
 

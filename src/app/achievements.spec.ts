@@ -1,0 +1,66 @@
+import {BADGES, newBadges, RollContext} from './achievements';
+import {emptyStats, Stats} from './stats.service';
+
+function roll(value: number, extra: Partial<RollContext> = {}): RollContext {
+  return {values: [value], value, sides: 20, mode: 'normal', isDayRoll: true, date: '2026-10-10', ...extra};
+}
+
+function stats(extra: Partial<Stats> = {}): Stats {
+  return {...emptyStats(), lifetimeRolls: 5, counts: {20: new Array(20).fill(0).map((_, i) => i === 0 ? 5 : 0)}, ...extra};
+}
+
+const ids = (s: Stats, r: RollContext) => newBadges(s, r).map(b => b.id);
+
+describe('badges', () => {
+  it('have unique ids', () => {
+    expect(new Set(BADGES.map(b => b.id)).size).toBe(BADGES.length);
+  });
+
+  it('give First roll on the first roll', () => {
+    expect(ids(stats({lifetimeRolls: 1}), roll(10))).toContain('first-roll');
+  });
+
+  it('give Natural for the top face of any die, and Rock bottom for a 1', () => {
+    expect(ids(stats(), roll(20))).toContain('natural');
+    expect(ids(stats(), roll(6, {sides: 6}))).toContain('natural');
+    expect(ids(stats(), roll(1))).toContain('rock-bottom');
+    expect(ids(stats(), roll(19))).not.toContain('natural');
+  });
+
+  it('give Snake eyes and Double crit only when both dice match', () => {
+    expect(ids(stats(), roll(1, {values: [1, 1], mode: 'disadvantage'}))).toContain('snake-eyes');
+    expect(ids(stats(), roll(1, {values: [1, 7], mode: 'disadvantage'}))).not.toContain('snake-eyes');
+    expect(ids(stats(), roll(20, {values: [20, 20], mode: 'advantage'}))).toContain('double-crit');
+    expect(ids(stats(), roll(20, {values: [20, 3], mode: 'advantage'}))).not.toContain('double-crit');
+  });
+
+  it('give Collector once every die has been rolled', () => {
+    const counts = {4: [1, 0, 0, 0], 6: [1, 0, 0, 0, 0, 0], 8: new Array(8).fill(1), 10: new Array(10).fill(1), 12: new Array(12).fill(1)};
+    expect(ids(stats({counts}), roll(5))).not.toContain('collector');
+    expect(ids(stats({counts: {...counts, 20: new Array(20).fill(1)}}), roll(5))).toContain('collector');
+  });
+
+  it('give streak badges at 7, 30 and 100 days, with progress', () => {
+    const at = (current: number) => stats({streak: {current, best: current, lastDate: '2026-10-10'}});
+    expect(ids(at(6), roll(10))).not.toContain('streak-7');
+    expect(ids(at(30), roll(10))).toEqual(expect.arrayContaining(['streak-7', 'streak-30']));
+    expect(BADGES.find(b => b.id === 'streak-100')!.progress!(at(42))).toEqual({current: 42, goal: 100, unit: 'days'});
+  });
+
+  it('give Comeback for the top face the day after a natural 1', () => {
+    const days = [{date: '2026-10-10', value: 20, sides: 20 as const, mode: 'normal' as const},
+      {date: '2026-10-09', value: 1, sides: 20 as const, mode: 'normal' as const}];
+    expect(ids(stats({days}), roll(20))).toContain('comeback');
+    expect(ids(stats({days}), roll(20, {isDayRoll: false}))).not.toContain('comeback');
+    expect(ids(stats({days: [days[0]]}), roll(20))).not.toContain('comeback');
+  });
+
+  it('give Regular and Devoted at 100 and 1,000 rolls', () => {
+    expect(ids(stats({lifetimeRolls: 99}), roll(10))).not.toContain('rolls-100');
+    expect(ids(stats({lifetimeRolls: 1000}), roll(10))).toEqual(expect.arrayContaining(['rolls-100', 'rolls-1000']));
+  });
+
+  it('are only new once', () => {
+    expect(ids(stats({achievements: {'natural': '2026-10-01'}}), roll(20))).not.toContain('natural');
+  });
+});

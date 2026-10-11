@@ -114,6 +114,8 @@ Chunk 2 comes early because Halloween (October) is three weeks away.
   - Collector (rolled every die type)
   - Streaks of 7, 30 and 100 days
   - Comeback (a day's roll of 1, then the top face the next day)
+  - Regular (100 rolls) and Devoted (1,000 rolls), added at review; both count practice rolls
+- **Built names:** First roll 🎲, Natural 🌟, Rock bottom 💀, Snake eyes 🐍, Double crit ✨, Collector 🧰, On a roll 🔥 (7), Habit 📅 (30), Centurion 💯 (100), Comeback 🔄, Regular 🎯, Devoted 🏆. Several unlocking at once share one pill ("3 badges unlocked"); the tick waits for a crit's fanfare.
 - Later chunks add their own badges.
 
 ### 6. Inspiration (merged with the nudge)

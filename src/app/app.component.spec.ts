@@ -121,7 +121,7 @@ describe('AppComponent', () => {
       app.setMode('advantage');
       await app.roll();
       fixture.detectChanges();
-      expect(live()).toBe(`Today's roll, advantage: 17. Dropped 4. ${app.result!.verdict.message}`);
+      expect(live()).toBe(`Today's roll, advantage: 17. Dropped 4. ${app.result!.verdict.message} Badge unlocked: First roll.`);
     });
 
     it('marks the roll mode with aria-pressed', () => {
@@ -228,6 +228,39 @@ describe('AppComponent', () => {
       expect(mute.getAttribute('aria-pressed')).toBe('true');
       expect(app.sound.sound).toBe(false);
       expect(JSON.parse(store.get('wmm.prefs.v1')!).sound).toBe(false);
+    });
+
+    it('unlocks badges once, shows them on the table and lists them in Stats', async () => {
+      const tick = vi.spyOn(app.sound, 'badgeUnlocked');
+      dice.next = [1, 1];
+      app.setMode('disadvantage');
+      await app.roll();
+      fixture.detectChanges();
+      expect(app.result!.badges.map(b => b.id)).toEqual(['first-roll', 'rock-bottom', 'snake-eyes']);
+      expect(fixture.nativeElement.querySelector('.result-badge').textContent).toContain('3 badges unlocked');
+      expect(tick).toHaveBeenCalledWith(1.8);
+
+      await app.roll();
+      expect(app.result!.badges).toEqual([]);
+
+      app.openStats();
+      app.setStatsTab('badges');
+      fixture.detectChanges();
+      const el: HTMLElement = fixture.nativeElement;
+      expect(el.querySelector('.badge-count')!.textContent!.replace(/\s+/g, ' ')).toContain('3 of 12 badges earned');
+      expect(el.querySelectorAll('.badge:not(.is-locked)').length).toBe(3);
+      expect(el.querySelector('.badge.is-locked .badge-progress')!.textContent).toContain('1 of 6 dice');
+    });
+
+    it('cycles through the three stats tabs with the arrow keys', () => {
+      app.openStats();
+      fixture.detectChanges();
+      const tab = () => fixture.nativeElement.querySelector('[role="tab"][aria-selected="true"]') as HTMLElement;
+      tab().dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowLeft'}));
+      expect(app.statsTab).toBe('badges');
+      fixture.detectChanges();
+      tab().dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight'}));
+      expect(app.statsTab).toBe('daily');
     });
 
     it('hides the nudge when it is switched off', async () => {

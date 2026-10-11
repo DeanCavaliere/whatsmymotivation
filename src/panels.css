@@ -777,3 +777,105 @@ label.die-row:has(input:focus-visible) {
   font-size: 20px;
   color: var(--tier, var(--ink));
 }
+
+/* ---------- Badges (Stats › Badges) ---------- */
+
+.badge-count {
+  margin: 4px 0 8px;
+  color: var(--ink-muted);
+}
+
+.badge-count strong {
+  color: var(--ink);
+}
+
+.progress {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.badges {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (max-width: 480px) {
+  .badges {
+    grid-template-columns: 1fr;
+  }
+}
+
+.badge {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.badge-medal {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent-fill);
+  box-shadow: inset 0 0 0 2px var(--accent);
+  font-size: 20px;
+}
+
+.badge-text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--ink-muted);
+}
+
+.badge-text strong {
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.badge-when {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.badge-progress {
+  font-size: 12px;
+}
+
+.badge-text .progress {
+  margin-top: 2px;
+}
+
+.badge.is-locked .badge-medal {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--line);
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+
+.badge.is-locked strong {
+  color: var(--ink-muted);
+}

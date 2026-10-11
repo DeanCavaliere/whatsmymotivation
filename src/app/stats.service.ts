@@ -83,6 +83,8 @@ export interface Stats {
   days: DayRoll[];
   streak: Streak;
   nudges: Nudges;
+  /** Badge id → the local date it was earned. */
+  achievements: Record<string, string>;
 }
 
 export interface DieSummary {
@@ -111,6 +113,7 @@ export function emptyStats(): Stats {
     days: [],
     streak: {current: 0, best: 0, lastDate: null},
     nudges: {lastWeek: null, used: 0, better: 0, worse: 0},
+    achievements: {},
   };
 }
 
@@ -267,6 +270,18 @@ function sanitizeNudges(raw: unknown): Nudges {
   };
 }
 
+function sanitizeAchievements(raw: unknown): Record<string, string> {
+  const achievements: Record<string, string> = {};
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    for (const [id, date] of Object.entries(raw)) {
+      if (isDateKey(date)) {
+        achievements[id] = date;
+      }
+    }
+  }
+  return achievements;
+}
+
 /** Coerces anything read from storage into a valid Stats, dropping whatever is malformed. */
 export function sanitize(raw: unknown): Stats {
   const stats = emptyStats();
@@ -289,6 +304,7 @@ export function sanitize(raw: unknown): Stats {
     stats.streak = {current, best: Math.max(current, Math.floor(k.best)), lastDate: k.lastDate};
   }
   stats.nudges = sanitizeNudges(r['nudges']);
+  stats.achievements = sanitizeAchievements(r['achievements']);
   return stats;
 }
 
@@ -373,6 +389,17 @@ export class StatsService {
       better: nudges.better + (change > 0 ? 1 : 0),
       worse: nudges.worse + (change < 0 ? 1 : 0),
     };
+    this.save(stats);
+    return stats;
+  }
+
+  /** Records badges as earned today. Re-reads storage first, like a roll. */
+  award(ids: readonly string[], now: Date = new Date()): Stats {
+    const stats = this.load();
+    const date = localDateKey(now);
+    for (const id of ids) {
+      stats.achievements[id] ??= date;
+    }
     this.save(stats);
     return stats;
   }
