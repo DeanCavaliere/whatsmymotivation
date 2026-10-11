@@ -11,7 +11,13 @@
   <meta property="og:description" content="Roll a d20 to find out how motivated you'll be today.">
   <meta property="og:url" content="https://whatsmymotivation.today">
   <meta property="og:type" content="website">
-  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="icon" href="favicon.ico" sizes="48x48">
+  <link rel="icon" href="assets/icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="apple-mobile-web-app-title" content="Motivation">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
 
   <!-- The table artwork is the first thing on screen; fetch it alongside the JS. -->
   <link rel="preload" as="image" href="assets/img/felt.webp" type="image/webp" fetchpriority="high">
@@ -19,7 +25,8 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@500;600;700&display=swap">
+  <!-- crossorigin makes the response cacheable by the service worker for offline use. -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@500;600;700&display=swap" crossorigin>
 
   <style>
     /* Paint the table colors before the app bundle loads. */

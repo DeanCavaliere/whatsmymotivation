@@ -1,5 +1,6 @@
-import {AfterViewInit, Component, ElementRef, HostListener, NgZone, OnDestroy, ViewChild, ChangeDetectionStrategy} from '@angular/core';
+import {AfterViewInit, Component, ElementRef, HostListener, NgZone, OnDestroy, Optional, ViewChild, ChangeDetectionStrategy} from '@angular/core';
 import {DatePipe, DecimalPipe} from '@angular/common';
+import {SwUpdate} from '@angular/service-worker';
 import {ConfettiComponent} from './components/confetti/confetti.component';
 import {ConfettiService} from './components/confetti/confetti.service';
 import {DiceService} from './dice.service';
@@ -76,7 +77,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   constructor(private dice: DiceService,
               private statsService: StatsService,
               private confetti: ConfettiService,
-              private zone: NgZone) {
+              private zone: NgZone,
+              @Optional() swUpdate: SwUpdate | null) {
+    // A cached version whose files are gone from the server can't recover on its own.
+    swUpdate?.unrecoverable.subscribe(() => document.location.reload());
     this.stats = this.statsService.load();
     this.summary = summarize(this.stats);
     this.refreshDerived();

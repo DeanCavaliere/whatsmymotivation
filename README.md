@@ -9,6 +9,8 @@ Live at [whatsmymotivation.today](https://whatsmymotivation.today).
 - 3D physics dice via [@3d-dice/dice-box](https://fantasticdice.games/), with a plain random roll as a fallback when WebGL isn't available
 - Normal, advantage (2d20 keep highest) and disadvantage (2d20 keep lowest) rolls
 - The first roll of each day is "today's roll"; later rolls are re-rolls
+- Daily streaks (current and best), with a nudge when today's roll would keep one going
+- Installable and works offline: a service worker (`ngsw-config.json`) caches the app, artwork and dice physics. It is only enabled in production builds
 - Stats stored in `localStorage`: lifetime/session counts, average, natural 20s and 1s, roll distribution, recent rolls
 - Share a roll (Web Share API, or copy to clipboard)
 - Roll with the button, Space/Enter, or by tapping the table
@@ -35,4 +37,5 @@ Pushing to `master` deploys to GitHub Pages via `.github/workflows/workflow.yml`
 | `src/app/dice.service.ts` | dice-box wrapper: init, physics tuning, fallback |
 | `src/app/components/confetti` | Canvas confetti / tears overlay |
 | `src/assets/img` | Table artwork (WebP). The frame is drawn as a CSS 9-slice `border-image` |
+| `src/assets/icons`, `src/manifest.webmanifest` | App icons and web app manifest for installing to a home screen |
 | `node_modules/@3d-dice/dice-box/dist/assets` | dice-box physics (Ammo WASM) and dice themes, copied to `assets/dice-box` at build time |
