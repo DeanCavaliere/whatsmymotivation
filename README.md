@@ -15,10 +15,12 @@ Live at [whatsmymotivation.today](https://whatsmymotivation.today).
 
 ## Development
 
+Requires Node 22 or 24 (see `.nvmrc`).
+
 ```bash
 npm install
 npm start          # dev server on http://localhost:4405
-npm test           # unit tests (Karma + Chrome)
+npm test           # unit tests (Vitest + jsdom)
 npm run build      # production build into dist/whatsmymotivation
 ```
 
@@ -33,4 +35,4 @@ Pushing to `master` deploys to GitHub Pages via `.github/workflows/workflow.yml`
 | `src/app/dice.service.ts` | dice-box wrapper: init, physics tuning, fallback |
 | `src/app/components/confetti` | Canvas confetti / tears overlay |
 | `src/assets/img` | Table artwork (WebP). The frame is drawn as a CSS 9-slice `border-image` |
-| `src/assets/dice-box` | dice-box physics (Ammo WASM) and dice theme assets |
+| `node_modules/@3d-dice/dice-box/dist/assets` | dice-box physics (Ammo WASM) and dice themes, copied to `assets/dice-box` at build time |

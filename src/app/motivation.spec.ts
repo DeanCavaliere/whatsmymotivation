@@ -1,8 +1,8 @@
-import {celebrationFor, diceNotation, keptValue, MESSAGES, randomD20, tierFor, verdictFor} from './motivation';
+import {celebrationFor, Tier, diceNotation, keptValue, MESSAGES, randomD20, tierFor, verdictFor} from './motivation';
 
 describe('motivation', () => {
   describe('tierFor', () => {
-    const cases: [number, string][] = [
+    const cases: [number, Tier][] = [
       [1, 'crit-fail'],
       [2, 'very-low'], [5, 'very-low'],
       [6, 'low'], [8, 'low'],
@@ -12,7 +12,7 @@ describe('motivation', () => {
       [20, 'crit-success'],
     ];
     cases.forEach(([value, tier]) => {
-      it(`maps ${value} to ${tier}`, () => expect(tierFor(value)).toBe(tier as any));
+      it(`maps ${value} to ${tier}`, () => expect(tierFor(value)).toBe(tier));
     });
   });
 
@@ -48,10 +48,10 @@ describe('motivation', () => {
     const seen = new Set<number>();
     for (let i = 0; i < 2000; i++) {
       const v = randomD20();
-      expect(Number.isInteger(v) && v >= 1 && v <= 20).toBeTrue();
+      expect(Number.isInteger(v) && v >= 1 && v <= 20).toBe(true);
       seen.add(v);
     }
-    expect(seen.has(1)).toBeTrue();
-    expect(seen.has(20)).toBeTrue();
+    expect(seen.has(1)).toBe(true);
+    expect(seen.has(20)).toBe(true);
   });
 });

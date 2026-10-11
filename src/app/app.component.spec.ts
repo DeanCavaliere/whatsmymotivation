@@ -23,6 +23,8 @@ describe('AppComponent', () => {
   let store: Map<string, string>;
 
   beforeEach(async () => {
+    // jsdom has no canvas; the confetti layer copes with a missing context.
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
     store = new Map();
     const storage: KeyValueStorage = {
       getItem: k => store.get(k) ?? null,
@@ -44,7 +46,7 @@ describe('AppComponent', () => {
   });
 
   it('becomes ready once the dice are set up', () => {
-    expect(app.ready).toBeTrue();
+    expect(app.ready).toBe(true);
   });
 
   it('counts rolls from the button, not just the keyboard', async () => {
@@ -82,10 +84,10 @@ describe('AppComponent', () => {
 
   it('marks only the first roll of the day as today\'s roll', async () => {
     await app.roll();
-    expect(app.result?.isToday).toBeTrue();
+    expect(app.result?.isToday).toBe(true);
     dice.next = [3];
     await app.roll();
-    expect(app.result?.isToday).toBeFalse();
+    expect(app.result?.isToday).toBe(false);
     expect(app.today?.value).toBe(12);
   });
 });

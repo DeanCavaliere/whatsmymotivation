@@ -13,10 +13,10 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Use Node.js 18.x
+    - name: Use Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: 18.x
+        node-version-file: .nvmrc
         cache: npm
 
     - name: Prepare and deploy
@@ -24,4 +24,5 @@ jobs:
         GH_TOKEN: ${{ secrets.GH_TOKEN }}
       run: |
         npm ci
+        npm test -- --watch=false
         npm run ng -- deploy --dir=dist/whatsmymotivation --cname=whatsmymotivation.today --name="DeanCavaliere" --email=deancaval@gmail.com --repo="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
