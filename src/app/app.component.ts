@@ -81,10 +81,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   @ViewChild('statsDialog', {static: true}) statsDialogRef!: ElementRef<HTMLDialogElement>;
   @ViewChild('settingsDialog', {static: true}) settingsDialogRef!: ElementRef<HTMLDialogElement>;
 
-  readonly modes: { value: RollMode, label: string, hint: string }[] = [
-    {value: 'disadvantage', label: 'Disadv.', hint: 'Roll two dice, keep the lower'},
-    {value: 'normal', label: 'Normal', hint: 'Roll one die'},
-    {value: 'advantage', label: 'Adv.', hint: 'Roll two dice, keep the higher'},
+  /** `label` is shortened to fit the top bar; screen readers get `name`. */
+  readonly modes: { value: RollMode, label: string, name: string, hint: string }[] = [
+    {value: 'disadvantage', label: 'Disadv.', name: 'Disadvantage', hint: 'Roll two dice, keep the lower'},
+    {value: 'normal', label: 'Normal', name: 'Normal', hint: 'Roll one die'},
+    {value: 'advantage', label: 'Adv.', name: 'Advantage', hint: 'Roll two dice, keep the higher'},
   ];
   readonly chart = CHART;
   readonly tableThemes = TABLE_THEMES;
@@ -117,6 +118,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   prefs: Prefs;
   install: InstallOption = null;
   toast = '';
+  /** What screen readers hear when the dice land. */
+  announcement = '';
   private installPrompt: BeforeInstallPromptEvent | null = null;
   private toastTimer?: ReturnType<typeof setTimeout>;
   private shakeTimer?: ReturnType<typeof setTimeout>;
@@ -239,6 +242,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
     this.rolling = true;
     this.result = null;
+    this.announcement = '';
     const mode = this.mode;
     const sides = this.prefs.sides;
     try {
@@ -270,6 +274,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         streak: this.streak,
         newBest: !nudge && !before && this.streak > 1 && this.streak > previousBest,
       };
+      this.announcement = announce(this.result, this.resultLabel(this.result, ', '));
       if (verdict.celebration) {
         this.confetti.trigger(verdict.celebration);
       }
@@ -298,13 +303,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return this.today ? 'Roll again' : 'Roll for motivation';
   }
 
-  resultLabel(result: RollResult): string {
+  resultLabel(result: RollResult, separator = ' · '): string {
     return [
       result.isToday ? 'Today\'s roll' : 'Re-roll',
       result.nudgedFrom ? 'nudged' : '',
       result.sides === 20 ? '' : `d${result.sides}`,
       result.mode === 'normal' ? '' : result.mode,
-    ].filter(Boolean).join(' · ');
+    ].filter(Boolean).join(separator);
   }
 
   async share(): Promise<void> {
@@ -445,6 +450,16 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 }
 
 /** Bars for each face, centered, and at most `maxBarWidth` wide so a d4 doesn't look like a wall. */
+function announce(r: RollResult, label: string): string {
+  return [
+    `${label}: ${r.value}.`,
+    r.dropped === null ? '' : `Dropped ${r.dropped}.`,
+    r.nudgedFrom ? `Was ${r.nudgedFrom.value}.` : '',
+    r.verdict.message,
+    r.isToday && r.streak > 1 ? `${r.streak}-day streak${r.newBest ? ', a new best!' : '.'}` : '',
+  ].filter(Boolean).join(' ');
+}
+
 function chartBars(faces: number[]): ChartBar[] {
   const {width, height, gap, maxBarWidth} = CHART;
   const n = faces.length;

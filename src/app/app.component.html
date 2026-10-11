@@ -2,6 +2,7 @@
 
 <div class="app">
   <header class="topbar">
+    <h1 class="visually-hidden">What's My Motivation Today?</h1>
     <dl class="hud">
       <div>
         <dt>Today</dt>
@@ -9,7 +10,7 @@
       </div>
       <div [title]="streakAtRisk ? 'Roll today to keep your streak going' : 'Days in a row with a roll'">
         <dt>Streak</dt>
-        <dd [class.is-at-risk]="streakAtRisk">{{ streak }}</dd>
+        <dd [class.is-at-risk]="streakAtRisk">{{ streak }}@if (streakAtRisk) {<span class="visually-hidden">, roll today to keep it</span>}</dd>
       </div>
       <div class="hud-optional">
         <dt>Lifetime</dt>
@@ -18,11 +19,10 @@
     </dl>
 
     <div class="controls">
-      <div class="segmented" role="radiogroup" aria-label="Roll mode">
+      <div class="segmented" role="group" aria-label="Roll mode">
         @for (m of modes; track m.value) {
-          <button type="button" role="radio"
-            [attr.aria-checked]="mode === m.value" [title]="m.hint"
-          [disabled]="rolling" (click)="setMode(m.value)">{{ m.label }}</button>
+          <button type="button" [attr.aria-pressed]="mode === m.value" [attr.aria-label]="m.name" [title]="m.hint"
+            [disabled]="rolling" (click)="setMode(m.value)">{{ m.label }}</button>
         }
       </div>
       <button type="button" class="btn btn-primary" (click)="roll()" [disabled]="!ready || rolling">
@@ -56,7 +56,7 @@
       <text class="hint-touch"><textPath href="#arc-bottom" startOffset="50%">Tap the Table to Roll for Motivation</textPath></text>
     </svg>
 
-    <section class="result" aria-live="polite">
+    <section class="result" aria-label="Result">
       @if (result; as r) {
         <div class="result-label">{{ resultLabel(r) }}</div>
         <div class="result-value" [attr.data-tier]="r.verdict.tier">{{ r.value }}</div>
@@ -85,11 +85,15 @@
       }
     </section>
 
-    <div #diceBox id="dice-box" class="dice-box"></div>
+    <div #diceBox id="dice-box" class="dice-box" aria-hidden="true"></div>
 
-    @if (toast) {
-      <div class="toast" role="status">{{ toast }}</div>
-    }
+    <!-- Live regions stay in the page so screen readers notice when their text changes. -->
+    <p class="visually-hidden" aria-live="polite" aria-atomic="true">{{ announcement }}</p>
+    <div role="status">
+      @if (toast) {
+        <div class="toast">{{ toast }}</div>
+      }
+    </div>
   </main>
 </div>
 
@@ -97,7 +101,7 @@
   <div class="panel-body">
     <header class="panel-header">
       <h2 id="stats-title">Your motivation stats</h2>
-      <button type="button" class="btn btn-ghost btn-small" (click)="statsDialog.close()" aria-label="Close stats">✕</button>
+      <button type="button" class="btn btn-ghost btn-small" (click)="statsDialog.close()" aria-label="Close stats"><span aria-hidden="true">✕</span></button>
     </header>
 
     <div class="tabs" role="tablist" aria-label="Which rolls to show">
@@ -109,7 +113,7 @@
         (click)="setStatsTab('all')" (keydown)="onTabKey($event)">All rolls</button>
     </div>
 
-    <div id="stats-panel" role="tabpanel" [attr.aria-labelledby]="'tab-' + statsTab">
+    <div id="stats-panel" role="tabpanel" tabindex="0" [attr.aria-labelledby]="'tab-' + statsTab">
       @if (statsTab === 'daily') {
         <p class="panel-note">Only your first roll each day counts here. That one is the day's motivation.</p>
         <dl class="tiles">
@@ -156,18 +160,17 @@
 
       @if (statsView.die; as die) {
         <div class="chart-header">
-          <h3>Roll distribution</h3>
+          <h3 id="chart-title">Roll distribution</h3>
           @if (statsView.dice.length > 1) {
-            <div class="segmented segmented-small" role="radiogroup" aria-label="Die to chart">
+            <div class="segmented segmented-small" role="group" aria-label="Die to chart">
               @for (d of statsView.dice; track d.sides) {
-                <button type="button" role="radio" [attr.aria-checked]="d.sides === die.sides"
+                <button type="button" [attr.aria-pressed]="d.sides === die.sides"
                   (click)="setChartSides(d.sides)">d{{ d.sides }}</button>
               }
             </div>
           }
         </div>
-        <svg class="chart" [attr.viewBox]="'0 -4 ' + chart.width + ' ' + (chart.height + 22)" role="img"
-          [attr.aria-label]="'Bar chart of how often each face of the d' + die.sides + ' was rolled'"
+        <svg class="chart" [attr.viewBox]="'0 -4 ' + chart.width + ' ' + (chart.height + 22)" aria-hidden="true"
           (mouseleave)="hoveredBar = null">
           <line class="chart-baseline" [attr.x1]="statsView.bars[0].x" [attr.y1]="chart.height" [attr.y2]="chart.height"
             [attr.x2]="statsView.bars[statsView.bars.length - 1].x + statsView.bars[statsView.bars.length - 1].width"/>
@@ -188,7 +191,17 @@
             </g>
           }
         </svg>
-        <p class="chart-readout">
+        <table class="visually-hidden" aria-labelledby="chart-title">
+          <thead>
+            <tr><th scope="col">Face of the d{{ die.sides }}</th><th scope="col">Times rolled</th></tr>
+          </thead>
+          <tbody>
+            @for (bar of statsView.bars; track bar.face) {
+              <tr><th scope="row">{{ bar.face }}</th><td>{{ bar.count }}</td></tr>
+            }
+          </tbody>
+        </table>
+        <p class="chart-readout" aria-hidden="true">
           @if (hoveredBar) {
             Rolled a <strong>{{ hoveredBar.face }}</strong> {{ hoveredBar.count }} {{ hoveredBar.count === 1 ? 'time' : 'times' }}
             ({{ hoveredBar.count / die.rolls | percent }})
@@ -198,18 +211,20 @@
             on the d{{ die.sides }}. Hover a bar for details.
           }
         </p>
+        <p class="visually-hidden">Average {{ die.average | number:'1.1-1' }} on the d{{ die.sides }}.</p>
       }
 
       @if (statsTab === 'daily') {
         @if (stats.days.length) {
-          <h3>Recent days</h3>
-          <ol class="history">
+          <h3 id="recent-days-title">Recent days</h3>
+          <ol class="history" aria-labelledby="recent-days-title">
             @for (d of stats.days; track d.date) {
               <li [attr.data-tier]="tierOf(d.value, d.sides)"
                 [title]="(dateFromKey(d.date) | date:'fullDate') + (d.mode === 'normal' ? '' : ' · ' + d.mode)
                   + (d.nudgedFrom ? ' · nudged from ' + d.nudgedFrom.value : '')">
                 <span>{{ d.value }}</span>
-                <span class="history-date">{{ dateFromKey(d.date) | date:'MMM d' }}{{ d.sides === 20 ? '' : ' · d' + d.sides }}{{ d.nudgedFrom ? ' ↻' : '' }}</span>
+                <span class="history-date">{{ dateFromKey(d.date) | date:'MMM d' }}{{ d.sides === 20 ? '' : ' · d' + d.sides }}@if (d.nudgedFrom) {<span aria-hidden="true"> ↻</span>}</span>
+                <span class="visually-hidden">{{ d.mode === 'normal' ? '' : ', ' + d.mode }}{{ d.nudgedFrom ? ', nudged from ' + d.nudgedFrom.value : '' }}</span>
               </li>
             }
           </ol>
@@ -218,8 +233,8 @@
         }
 
         @if (prefs.nudge || stats.nudges.used) {
-          <h3>Nudges</h3>
-          <dl class="tiles">
+          <h3 id="nudges-title">Nudges</h3>
+          <dl class="tiles" aria-labelledby="nudges-title">
             <div>
               <dt>Used</dt>
               <dd>{{ stats.nudges.used }}</dd>
@@ -240,8 +255,8 @@
         }
       } @else {
         @if (stats.history.length) {
-          <h3>Recent rolls</h3>
-          <ol class="history">
+          <h3 id="recent-rolls-title">Recent rolls</h3>
+          <ol class="history" aria-labelledby="recent-rolls-title">
             @for (h of stats.history; track $index) {
               <li [attr.data-tier]="tierOf(h.value, h.sides)"
                 [title]="(h.at | date:'medium') + (h.mode === 'normal' ? '' : ' · ' + h.mode) + (h.nudge ? ' · nudge' : '')">
@@ -249,6 +264,7 @@
                 @if (h.sides !== 20) {
                   <span class="history-date">d{{ h.sides }}</span>
                 }
+                <span class="visually-hidden">, {{ h.at | date:'medium' }}{{ h.mode === 'normal' ? '' : ', ' + h.mode }}{{ h.nudge ? ', nudge' : '' }}</span>
               </li>
             }
           </ol>
@@ -262,6 +278,7 @@
       <button type="button" class="btn btn-danger btn-small" (click)="resetStats()">
         {{ confirmingReset ? 'Click again to erase everything' : 'Reset stats' }}
       </button>
+      <span class="visually-hidden" aria-live="polite">{{ confirmingReset ? 'Press again to erase all your stats.' : '' }}</span>
     </footer>
   </div>
 </dialog>
@@ -270,28 +287,32 @@
   <div class="panel-body">
     <header class="panel-header">
       <h2 id="settings-title">Settings</h2>
-      <button type="button" class="btn btn-ghost btn-small" (click)="settingsDialog.close()" aria-label="Close">✕</button>
+      <button type="button" class="btn btn-ghost btn-small" (click)="settingsDialog.close()" aria-label="Close settings"><span aria-hidden="true">✕</span></button>
     </header>
 
     <div class="settings-list">
       <details class="accordion" name="settings">
         <summary>
           <span class="accordion-title">Die</span>
-          <span class="accordion-value">d{{ prefs.sides }}</span>
+          <span class="accordion-value"><span class="visually-hidden">, currently </span>d{{ prefs.sides }}</span>
         </summary>
         <div class="accordion-body">
           <fieldset class="die-options">
-            <legend class="visually-hidden">Die</legend>
+            <legend class="visually-hidden">Die to roll</legend>
             <div class="die-row die-head" aria-hidden="true">
-              <span></span><span>Crit</span><span>Good day</span><span>Bad day</span>
+              <span></span><span></span><span>Crit</span><span>Good day</span><span>Bad day</span>
             </div>
             @for (d of dieOptions; track d.sides) {
+              <!-- Named by the die alone; the blurb and odds are read as its description. -->
               <label class="die-row">
-                <input type="radio" name="sides" [value]="d.sides" [checked]="prefs.sides === d.sides" (change)="setSides(d.sides)">
-                <span class="die-name"><strong>d{{ d.sides }}</strong> <small>{{ d.blurb }}</small></span>
-                <span><span class="visually-hidden">Crit: </span>1 in {{ d.sides }}</span>
-                <span><span class="visually-hidden">Good day: </span>{{ d.odds.good | percent }}</span>
-                <span><span class="visually-hidden">Bad day: </span>{{ d.odds.bad | percent }}</span>
+                <input type="radio" name="sides" [id]="'die-' + d.sides" [value]="d.sides" [checked]="prefs.sides === d.sides"
+                  [attr.aria-labelledby]="'die-' + d.sides + '-name'"
+                  [attr.aria-describedby]="'die-' + d.sides + '-blurb die-' + d.sides + '-crit die-' + d.sides + '-good die-' + d.sides + '-bad'"
+                  (change)="setSides(d.sides)">
+                <span class="die-name"><strong [id]="'die-' + d.sides + '-name'">d{{ d.sides }}</strong> <small [id]="'die-' + d.sides + '-blurb'">{{ d.blurb }}</small></span>
+                <span [id]="'die-' + d.sides + '-crit'"><span class="visually-hidden">Crit: </span>1 in {{ d.sides }}</span>
+                <span [id]="'die-' + d.sides + '-good'"><span class="visually-hidden">Good day: </span>{{ d.odds.good | percent }}</span>
+                <span [id]="'die-' + d.sides + '-bad'"><span class="visually-hidden">Bad day: </span>{{ d.odds.bad | percent }}</span>
               </label>
             }
           </fieldset>
@@ -304,7 +325,8 @@
         <summary>
           <span class="accordion-title">Dice color</span>
           <span class="accordion-value">
-            <span class="swatch-chip swatch-die" [style.--chip]="diceColorOf(prefs.dice).color"></span>
+            <span class="visually-hidden">, currently </span>
+            <span class="swatch-chip swatch-die" [style.--chip]="diceColorOf(prefs.dice).color" aria-hidden="true"></span>
             {{ diceColorOf(prefs.dice).label }}
           </span>
         </summary>
@@ -314,7 +336,7 @@
             @for (d of diceColors; track d.id) {
               <label class="swatch">
                 <input type="radio" name="dice" [value]="d.id" [checked]="prefs.dice === d.id" (change)="setDice(d.id)">
-                <span class="swatch-chip swatch-die" [style.--chip]="d.color"></span>
+                <span class="swatch-chip swatch-die" [style.--chip]="d.color" aria-hidden="true"></span>
                 {{ d.label }}
               </label>
             }
@@ -327,7 +349,8 @@
         <summary>
           <span class="accordion-title">Table color</span>
           <span class="accordion-value">
-            <span class="swatch-chip swatch-felt" [style.--chip]="tableThemeOf(prefs.table).felt"></span>
+            <span class="visually-hidden">, currently </span>
+            <span class="swatch-chip swatch-felt" [style.--chip]="tableThemeOf(prefs.table).felt" aria-hidden="true"></span>
             {{ tableThemeOf(prefs.table).label }}
           </span>
         </summary>
@@ -337,7 +360,7 @@
             @for (t of tableThemes; track t.id) {
               <label class="swatch">
                 <input type="radio" name="table" [value]="t.id" [checked]="prefs.table === t.id" (change)="setTable(t.id)">
-                <span class="swatch-chip swatch-felt" [style.--chip]="t.felt"></span>
+                <span class="swatch-chip swatch-felt" [style.--chip]="t.felt" aria-hidden="true"></span>
                 {{ t.label }}
               </label>
             }
@@ -345,12 +368,14 @@
         </div>
       </details>
 
-      <label class="switch-row">
+      <label class="switch-row" for="nudge-switch">
         <span class="switch-text">
-          <strong>Nudge the table</strong>
-          <small>Once a week, shake the table to re-roll today's roll. Your nudge comes back every Sunday.</small>
+          <strong id="nudge-label">Nudge the table</strong>
+          <small id="nudge-description">Once a week, shake the table to re-roll today's roll. Your nudge comes back every Sunday.</small>
         </span>
-        <input #nudgeSwitch class="switch" type="checkbox" role="switch" [checked]="prefs.nudge"
+        <span class="switch-state" aria-hidden="true">{{ prefs.nudge ? 'On' : 'Off' }}</span>
+        <input #nudgeSwitch id="nudge-switch" class="switch" type="checkbox" role="switch" [checked]="prefs.nudge"
+          aria-labelledby="nudge-label" aria-describedby="nudge-description"
           (change)="setNudge(nudgeSwitch.checked)">
       </label>
     </div>

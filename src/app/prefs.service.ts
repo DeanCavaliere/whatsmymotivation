@@ -18,12 +18,12 @@ export interface DiceColor {
 }
 
 export const TABLE_THEMES: readonly TableTheme[] = [
-  {id: 'classic', label: 'Classic', felt: '#10422f', chalk: 'rgba(150, 230, 210, 0.42)'},
-  {id: 'royal', label: 'Royal', felt: '#143a66', chalk: 'rgba(170, 205, 255, 0.42)'},
-  {id: 'crimson', label: 'Crimson', felt: '#5e1a20', chalk: 'rgba(255, 196, 186, 0.4)'},
-  {id: 'plum', label: 'Plum', felt: '#3e2350', chalk: 'rgba(225, 196, 255, 0.4)'},
-  {id: 'teal', label: 'Teal', felt: '#0f4a4f', chalk: 'rgba(160, 238, 238, 0.42)'},
-  {id: 'midnight', label: 'Midnight', felt: '#1d1f24', chalk: 'rgba(220, 222, 232, 0.34)'},
+  {id: 'classic', label: 'Classic', felt: '#10422f', chalk: 'rgba(150, 230, 210, 0.6)'},
+  {id: 'royal', label: 'Royal', felt: '#143a66', chalk: 'rgba(170, 205, 255, 0.6)'},
+  {id: 'crimson', label: 'Crimson', felt: '#5e1a20', chalk: 'rgba(255, 196, 186, 0.6)'},
+  {id: 'plum', label: 'Plum', felt: '#3e2350', chalk: 'rgba(225, 196, 255, 0.6)'},
+  {id: 'teal', label: 'Teal', felt: '#0f4a4f', chalk: 'rgba(160, 238, 238, 0.6)'},
+  {id: 'midnight', label: 'Midnight', felt: '#1d1f24', chalk: 'rgba(220, 222, 232, 0.5)'},
 ];
 
 export const DICE_COLORS: readonly DiceColor[] = [

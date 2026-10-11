@@ -105,6 +105,32 @@ describe('AppComponent', () => {
       expect(app.today?.value).toBe(12);
     });
 
+    it('announces the result to screen readers', async () => {
+      const live = () => fixture.nativeElement.querySelector('[aria-live="polite"]').textContent.trim();
+      expect(live()).toBe('');
+      dice.next = [4, 17];
+      app.setMode('advantage');
+      await app.roll();
+      fixture.detectChanges();
+      expect(live()).toBe(`Today's roll, advantage: 17. Dropped 4. ${app.result!.verdict.message}`);
+    });
+
+    it('marks the roll mode with aria-pressed', () => {
+      app.setMode('disadvantage');
+      fixture.detectChanges();
+      const pressed = [...fixture.nativeElement.querySelectorAll('.segmented button[aria-pressed="true"]')]
+        .map((b: HTMLButtonElement) => b.getAttribute('aria-label'));
+      expect(pressed).toEqual(['Disadvantage']);
+    });
+
+    it('names each die by itself and describes its odds', () => {
+      const d6 = fixture.nativeElement.querySelector('#die-6') as HTMLInputElement;
+      const text = (ids: string) => ids.split(' ')
+        .map(id => fixture.nativeElement.querySelector('#' + id).textContent.trim()).join(' ');
+      expect(text(d6.getAttribute('aria-labelledby')!)).toBe('d6');
+      expect(text(d6.getAttribute('aria-describedby')!)).toContain('Crit: 1 in 6');
+    });
+
     it('rolls in the chosen dice color and tints the table', async () => {
       const ruby = fixture.nativeElement.querySelector('input[name="dice"][value="ruby"]') as HTMLInputElement;
       ruby.click();

@@ -17,6 +17,7 @@ Live at [whatsmymotivation.today](https://whatsmymotivation.today).
 - Nudge the table: once a week, re-roll today's roll. It comes back every Sunday, and the daily stats track how often nudges helped or backfired. Can be switched off in Settings
 - Table themes and dice colors (Settings). The felt is one neutral texture tinted with CSS `background-blend-mode`, so a new table color is a one-line addition to `prefs.service.ts`
 - Roll with the button, Space/Enter, or by tapping the table
+- Accessible: text meets WCAG AA contrast on every table theme, chosen options are marked by more than color, results are announced to screen readers, the chart has a table equivalent, and it supports keyboard focus, forced colors and reduced motion
 
 ## Development
 
