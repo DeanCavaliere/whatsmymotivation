@@ -77,6 +77,10 @@
     </section>
 
     <div #diceBox id="dice-box" class="dice-box"></div>
+
+    @if (toast) {
+      <div class="toast" role="status">{{ toast }}</div>
+    }
   </main>
 </div>
 
@@ -221,7 +225,3 @@
     }
   </div>
 </dialog>
-
-@if (toast) {
-  <div class="toast" role="status">{{ toast }}</div>
-}
