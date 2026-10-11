@@ -1,18 +1,20 @@
 import {ComponentFixture, TestBed} from '@angular/core/testing';
 import {AppComponent} from './app.component';
 import {DiceService} from './dice.service';
-import {RollMode} from './motivation';
+import {DieSides, RollMode} from './motivation';
 import {addDays, KeyValueStorage, localDateKey, STATS_KEY, STATS_STORAGE} from './stats.service';
 
 class FakeDiceService {
   next: number[] = [12];
+  lastSides?: DieSides;
   lastColor?: string;
 
   async init(): Promise<'fallback'> {
     return 'fallback';
   }
 
-  async roll(_mode: RollMode, color?: string): Promise<number[]> {
+  async roll(_mode: RollMode, sides: DieSides, color?: string): Promise<number[]> {
+    this.lastSides = sides;
     this.lastColor = color;
     return this.next;
   }
@@ -34,6 +36,10 @@ describe('AppComponent', () => {
   beforeEach(async () => {
     // jsdom has no canvas; the confetti layer copes with a missing context.
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+    // Nor modal dialogs.
+    HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+      this.open = true;
+    };
     store = new Map();
     const storage: KeyValueStorage = {
       getItem: k => store.get(k) ?? null,
@@ -108,7 +114,39 @@ describe('AppComponent', () => {
 
       expect(dice.lastColor).toBe('#b3262d');
       expect(document.documentElement.style.getPropertyValue('--felt')).toBe('#143a66');
-      expect(JSON.parse(store.get('wmm.prefs.v1')!)).toEqual({table: 'royal', dice: 'ruby'});
+      expect(JSON.parse(store.get('wmm.prefs.v1')!)).toEqual({table: 'royal', dice: 'ruby', sides: 20});
+    });
+
+    it('rolls the chosen die and labels the result with it', async () => {
+      const d6 = fixture.nativeElement.querySelector('input[name="sides"][value="6"]') as HTMLInputElement;
+      d6.click();
+      dice.next = [6];
+      await app.roll();
+      fixture.detectChanges();
+
+      expect(dice.lastSides).toBe(6);
+      expect(app.result?.verdict.tier).toBe('crit-success');
+      expect(fixture.nativeElement.querySelector('.result-label').textContent).toContain('d6');
+      expect(app.stats.counts[6]).toEqual([0, 0, 0, 0, 0, 1]);
+    });
+
+    it('shows daily and all-roll stats on separate tabs', async () => {
+      await app.roll();
+      dice.next = [3];
+      await app.roll();
+      app.openStats();
+      fixture.detectChanges();
+      const el: HTMLElement = fixture.nativeElement;
+      const readout = () => el.querySelector('.chart-readout')!.textContent!.replace(/\s+/g, ' ');
+
+      expect(el.querySelector('[role="tab"][aria-selected="true"]')!.textContent).toContain('Daily');
+      expect(readout()).toContain('across 1 day on the d20');
+      expect(el.querySelectorAll('.history li').length).toBe(1);
+
+      (el.querySelector('#tab-all') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(readout()).toContain('across 2 rolls on the d20');
+      expect(el.querySelectorAll('.history li').length).toBe(2);
     });
   });
 

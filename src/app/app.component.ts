@@ -1,25 +1,29 @@
 import {AfterViewInit, Component, ElementRef, HostListener, NgZone, OnDestroy, Optional, ViewChild, ChangeDetectionStrategy} from '@angular/core';
-import {DatePipe, DecimalPipe} from '@angular/common';
+import {DatePipe, DecimalPipe, PercentPipe} from '@angular/common';
 import {SwUpdate} from '@angular/service-worker';
 import {ConfettiComponent} from './components/confetti/confetti.component';
 import {ConfettiService} from './components/confetti/confetti.service';
 import {DiceService} from './dice.service';
-import {keptValue, RollMode, Tier, tierFor, Verdict, verdictFor} from './motivation';
-import {DICE_COLORS, diceColor, Prefs, PREFS_KEY, PrefsService, TABLE_THEMES, tableTheme} from './prefs.service';
+import {DieSides, dieOdds, keptValue, RollMode, Tier, tierFor, Verdict, verdictFor} from './motivation';
+import {DICE_COLORS, diceColor, DIE_OPTIONS, Prefs, PREFS_KEY, PrefsService, TABLE_THEMES, tableTheme} from './prefs.service';
 import {
   activeStreak,
+  CountTotals,
+  countTotals,
+  dateFromKey,
+  DayRoll,
+  DieSummary,
+  dieSummaries,
   Stats,
   STATS_KEY,
   StatsService,
-  StatsSummary,
   streakAtRisk,
-  summarize,
-  TodayRoll,
   todayRoll,
 } from './stats.service';
 
 interface RollResult {
   value: number;
+  sides: DieSides;
   /** The other die when rolling with advantage/disadvantage. */
   dropped: number | null;
   mode: RollMode;
@@ -35,7 +39,20 @@ interface ChartBar {
   count: number;
   x: number;
   y: number;
+  width: number;
   height: number;
+  /** Whether the face gets a label under the axis. */
+  labeled: boolean;
+}
+
+export type StatsTab = 'daily' | 'all';
+
+interface StatsView {
+  /** Dice with rolls in the current tab. */
+  dice: DieSummary[];
+  /** The die whose distribution is charted. */
+  die: DieSummary | null;
+  bars: ChartBar[];
 }
 
 /** Chromium's install prompt event; not in the DOM typings. */
@@ -47,14 +64,14 @@ interface BeforeInstallPromptEvent extends Event {
 export type InstallOption = 'prompt' | 'ios' | 'installed' | null;
 
 const SITE_URL = 'https://whatsmymotivation.today';
-const CHART = {width: 400, height: 120, gap: 2, barWidth: 18};
+const CHART = {width: 400, height: 120, gap: 2, maxBarWidth: 40};
 
 @Component({
     selector: 'app-root',
     templateUrl: './app.component.html',
     styleUrls: ['./app.component.css'],
     changeDetection: ChangeDetectionStrategy.Eager,
-    imports: [ConfettiComponent, DecimalPipe, DatePipe]
+    imports: [ConfettiComponent, DecimalPipe, DatePipe, PercentPipe]
 })
 export class AppComponent implements AfterViewInit, OnDestroy {
   @ViewChild('diceBox', {static: true}) diceBoxRef!: ElementRef<HTMLElement>;
@@ -69,18 +86,24 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly chart = CHART;
   readonly tableThemes = TABLE_THEMES;
   readonly diceColors = DICE_COLORS;
+  readonly dieOptions = DIE_OPTIONS.map(d => ({...d, odds: dieOdds(d.sides)}));
+  readonly dateFromKey = dateFromKey;
 
   ready = false;
   rolling = false;
   mode: RollMode = 'normal';
   result: RollResult | null = null;
   stats: Stats;
-  summary: StatsSummary;
-  today: TodayRoll | null = null;
+  totals!: CountTotals;
+  daysRolled = 0;
+  today: DayRoll | null = null;
   streak = 0;
   streakAtRisk = false;
   sessionRolls = 0;
-  bars: ChartBar[] = [];
+  statsTab: StatsTab = 'daily';
+  /** The die picked in the stats dialog, when rolls span more than one. */
+  chartSides: DieSides | null = null;
+  statsView: StatsView = {dice: [], die: null, bars: []};
   hoveredBar: ChartBar | null = null;
   confirmingReset = false;
   prefs: Prefs;
@@ -101,15 +124,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.applyTable();
     this.install = detectInstallOption();
     this.stats = this.statsService.load();
-    this.summary = summarize(this.stats);
     this.refreshDerived();
     const today = todayRoll(this.stats);
     if (today) {
       this.result = {
         value: today.value,
+        sides: today.sides,
         dropped: null,
         mode: today.mode,
-        verdict: verdictFor(today.value),
+        verdict: verdictFor(today.value, today.sides),
         isToday: true,
         streak: this.streak,
         newBest: false,
@@ -187,18 +210,20 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.rolling = true;
     this.result = null;
     const mode = this.mode;
+    const sides = this.prefs.sides;
     try {
-      const values = await this.dice.roll(mode, diceColor(this.prefs.dice).color);
+      const values = await this.dice.roll(mode, sides, diceColor(this.prefs.dice).color);
       const value = keptValue(values, mode);
       const hadToday = !!todayRoll(this.stats);
       const previousBest = this.stats.streak.best;
-      this.stats = this.statsService.record(value, mode);
+      this.stats = this.statsService.record(value, sides, mode);
       this.sessionRolls++;
       this.refreshDerived();
 
-      const verdict = verdictFor(value);
+      const verdict = verdictFor(value, sides);
       this.result = {
         value,
+        sides,
         dropped: values.length > 1 ? values.find((v, i) => i !== values.indexOf(value)) ?? null : null,
         mode,
         verdict,
@@ -224,8 +249,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.mode = mode;
   }
 
-  tierOf(value: number): Tier {
-    return tierFor(value);
+  tierOf(value: number, sides: DieSides): Tier {
+    return tierFor(value, sides);
   }
 
   get rollLabel(): string {
@@ -235,19 +260,21 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   resultLabel(result: RollResult): string {
-    const prefix = result.isToday ? 'Today\'s roll' : 'Re-roll';
-    if (result.mode === 'advantage') return `${prefix} · advantage`;
-    if (result.mode === 'disadvantage') return `${prefix} · disadvantage`;
-    return prefix;
+    return [
+      result.isToday ? 'Today\'s roll' : 'Re-roll',
+      result.sides === 20 ? '' : `d${result.sides}`,
+      result.mode === 'normal' ? '' : result.mode,
+    ].filter(Boolean).join(' · ');
   }
 
   async share(): Promise<void> {
     if (!this.result) {
       return;
     }
-    const {value, mode, verdict} = this.result;
+    const {value, sides, mode, verdict} = this.result;
+    const die = sides === 20 ? '' : ` on a d${sides}`;
     const how = mode === 'normal' ? '' : ` with ${mode}`;
-    const text = `I rolled a ${value}${how} for motivation today 🎲 "${verdict.message}"`;
+    const text = `I rolled a ${value}${die}${how} for motivation today 🎲 "${verdict.message}"`;
     try {
       if (navigator.share) {
         await navigator.share({text, url: SITE_URL});
@@ -264,8 +291,29 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   openStats(): void {
     this.confirmingReset = false;
-    this.hoveredBar = null;
+    this.chartSides = null;
+    this.refreshStatsView();
     this.statsDialogRef.nativeElement.showModal();
+  }
+
+  setStatsTab(tab: StatsTab): void {
+    this.statsTab = tab;
+    this.refreshStatsView();
+  }
+
+  /** Arrow keys move between tabs, as in any tablist. */
+  onTabKey(event: KeyboardEvent): void {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+      return;
+    }
+    event.preventDefault();
+    this.setStatsTab(this.statsTab === 'daily' ? 'all' : 'daily');
+    document.getElementById(`tab-${this.statsTab}`)?.focus();
+  }
+
+  setChartSides(sides: DieSides): void {
+    this.chartSides = sides;
+    this.refreshStatsView();
   }
 
   openCustomize(): void {
@@ -287,6 +335,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   setDice(id: string): void {
     this.prefs = {...this.prefs, dice: id};
+    this.prefsService.save(this.prefs);
+  }
+
+  setSides(sides: DieSides): void {
+    this.prefs = {...this.prefs, sides};
     this.prefsService.save(this.prefs);
   }
 
@@ -315,17 +368,20 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   private refreshDerived(): void {
-    this.summary = summarize(this.stats);
+    this.totals = countTotals(this.stats.counts);
+    this.daysRolled = countTotals(this.stats.dailyCounts).rolls;
     this.today = todayRoll(this.stats);
     this.streak = activeStreak(this.stats);
     this.streakAtRisk = streakAtRisk(this.stats);
+    this.refreshStatsView();
+  }
 
-    const max = Math.max(1, ...this.stats.faceCounts);
-    const {height, barWidth, gap} = CHART;
-    this.bars = this.stats.faceCounts.map((count, i) => {
-      const h = count ? Math.max(4, (count / max) * height) : 0;
-      return {face: i + 1, count, x: i * (barWidth + gap), y: height - h, height: h};
-    });
+  /** Charts the picked die, else the one being rolled now, else whichever has rolls. */
+  private refreshStatsView(): void {
+    const dice = dieSummaries(this.statsTab === 'daily' ? this.stats.dailyCounts : this.stats.counts);
+    const die = dice.find(d => d.sides === this.chartSides) ?? dice.find(d => d.sides === this.prefs.sides) ?? dice[0] ?? null;
+    this.statsView = {dice, die, bars: die ? chartBars(die.faces) : []};
+    this.hoveredBar = null;
   }
 
   private applyTable(): void {
@@ -340,6 +396,28 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     clearTimeout(this.toastTimer);
     this.toastTimer = setTimeout(() => this.toast = '', 2500);
   }
+}
+
+/** Bars for each face, centered, and at most `maxBarWidth` wide so a d4 doesn't look like a wall. */
+function chartBars(faces: number[]): ChartBar[] {
+  const {width, height, gap, maxBarWidth} = CHART;
+  const n = faces.length;
+  const barWidth = Math.min(maxBarWidth, (width - gap * (n - 1)) / n);
+  const offset = (width - n * barWidth - (n - 1) * gap) / 2;
+  const max = Math.max(1, ...faces);
+  return faces.map((count, i) => {
+    const h = count ? Math.max(4, (count / max) * height) : 0;
+    const face = i + 1;
+    return {
+      face,
+      count,
+      x: offset + i * (barWidth + gap),
+      y: height - h,
+      width: barWidth,
+      height: h,
+      labeled: n <= 12 || face === 1 || face % 5 === 0,
+    };
+  });
 }
 
 function detectInstallOption(): InstallOption {

@@ -1,16 +1,19 @@
 import {
   activeStreak,
   addDays,
+  countTotals,
+  DAYS_LIMIT,
+  dieSummaries,
   HISTORY_LIMIT,
   KeyValueStorage,
   LEGACY_LIFETIME_KEY,
   localDateKey,
   sanitize,
   STATS_KEY,
+  STATS_V1_KEY,
   StatsService,
   streakAtRisk,
-  streakFromHistory,
-  summarize,
+  streakFromDates,
   todayRoll,
 } from './stats.service';
 
@@ -35,9 +38,10 @@ class MemoryStorage implements KeyValueStorage {
 }
 
 describe('StatsService', () => {
-  const morning = new Date(2026, 9, 10, 9, 0);
-  const evening = new Date(2026, 9, 10, 21, 0);
-  const tomorrow = new Date(2026, 9, 11, 9, 0);
+  const day = (d: number, hour = 9) => new Date(2026, 9, d, hour, 0);
+  const morning = day(10);
+  const evening = day(10, 21);
+  const tomorrow = day(11);
   let storage: MemoryStorage;
   let service: StatsService;
 
@@ -49,108 +53,172 @@ describe('StatsService', () => {
   it('starts empty', () => {
     const stats = service.load();
     expect(stats.lifetimeRolls).toBe(0);
-    expect(stats.faceCounts.length).toBe(20);
-    expect(stats.today).toBeNull();
+    expect(stats.counts).toEqual({});
+    expect(stats.days).toEqual([]);
   });
 
   it('records rolls and persists them', () => {
-    service.record(20, 'normal', morning);
-    service.record(1, 'disadvantage', evening);
+    service.record(20, 20, 'normal', morning);
+    service.record(1, 20, 'disadvantage', evening);
 
     const reloaded = new StatsService(storage).load();
     expect(reloaded.lifetimeRolls).toBe(2);
-    expect(reloaded.faceCounts[19]).toBe(1);
-    expect(reloaded.faceCounts[0]).toBe(1);
+    expect(reloaded.counts[20]![19]).toBe(1);
+    expect(reloaded.counts[20]![0]).toBe(1);
     expect(reloaded.history.map(h => h.value)).toEqual([1, 20]);
   });
 
-  it('keeps the first roll of the day as today\'s roll', () => {
-    service.record(13, 'normal', morning);
-    const stats = service.record(2, 'normal', evening);
-    expect(todayRoll(stats, evening)?.value).toBe(13);
+  it('counts each die separately', () => {
+    service.record(4, 4, 'normal', morning);
+    service.record(4, 20, 'normal', morning);
+    const stats = service.record(1, 6, 'normal', morning);
 
-    const nextDay = service.record(18, 'advantage', tomorrow);
-    expect(todayRoll(nextDay, tomorrow)).toEqual({date: localDateKey(tomorrow), value: 18, mode: 'advantage'});
-    expect(todayRoll(nextDay, morning)).toBeNull();
+    expect(dieSummaries(stats.counts).map(d => [d.sides, d.rolls])).toEqual([[20, 1], [6, 1], [4, 1]]);
+    expect(countTotals(stats.counts)).toEqual({rolls: 3, crits: 1, critFails: 1});
+    expect(stats.history[0]).toMatchObject({value: 1, sides: 6});
+  });
+
+  it('keeps the first roll of each day as that day\'s roll', () => {
+    service.record(13, 20, 'normal', morning);
+    const stats = service.record(2, 20, 'normal', evening);
+    expect(todayRoll(stats, evening)?.value).toBe(13);
+    expect(countTotals(stats.dailyCounts).rolls).toBe(1);
+
+    const nextDay = service.record(3, 4, 'advantage', tomorrow);
+    expect(todayRoll(nextDay, tomorrow)).toEqual({date: localDateKey(tomorrow), value: 3, sides: 4, mode: 'advantage'});
+    expect(nextDay.days.map(d => d.value)).toEqual([3, 13]);
+    expect(nextDay.dailyCounts).toEqual({20: faces(20, {13: 1}), 4: faces(4, {3: 1})});
+  });
+
+  it('caps the list of days', () => {
+    for (let i = 0; i < DAYS_LIMIT + 5; i++) {
+      service.record(10, 20, 'normal', new Date(2026, 0, 1 + i, 9));
+    }
+    const stats = service.load();
+    expect(stats.days.length).toBe(DAYS_LIMIT);
+    expect(countTotals(stats.dailyCounts).rolls).toBe(DAYS_LIMIT + 5);
   });
 
   it('does not lose rolls made in another tab', () => {
     const otherTab = new StatsService(storage);
-    service.record(5, 'normal', morning);
-    otherTab.record(6, 'normal', morning);
-    service.record(7, 'normal', morning);
+    service.record(5, 20, 'normal', morning);
+    otherTab.record(6, 20, 'normal', morning);
+    service.record(7, 20, 'normal', morning);
     expect(service.load().lifetimeRolls).toBe(3);
   });
 
   it('migrates the legacy lifetime counter', () => {
     storage.setItem(LEGACY_LIFETIME_KEY, '41');
     expect(service.load().lifetimeRolls).toBe(41);
-    expect(service.record(10, 'normal', morning).lifetimeRolls).toBe(42);
+    expect(service.record(10, 20, 'normal', morning).lifetimeRolls).toBe(42);
+  });
+
+  it('migrates d20-only stats from version 1', () => {
+    const at = (d: number, hour: number) => day(d, hour).getTime();
+    storage.setItem(STATS_V1_KEY, JSON.stringify({
+      version: 1,
+      lifetimeRolls: 50,
+      faceCounts: faces(20, {7: 2, 12: 1, 20: 1}),
+      history: [
+        {value: 12, mode: 'normal', at: at(10, 20)},
+        {value: 7, mode: 'normal', at: at(10, 9)},
+        {value: 20, mode: 'advantage', at: at(9, 9)},
+        {value: 7, mode: 'normal', at: at(8, 9)},
+      ],
+      today: {date: '2026-10-10', value: 7, mode: 'normal'},
+      streak: {current: 3, best: 5, lastDate: '2026-10-10'},
+    }));
+
+    const stats = service.load();
+    expect(stats.lifetimeRolls).toBe(50);
+    expect(stats.counts).toEqual({20: faces(20, {7: 2, 12: 1, 20: 1})});
+    expect(stats.history.every(h => h.sides === 20)).toBe(true);
+    expect(stats.days.map(d => [d.date, d.value])).toEqual([['2026-10-10', 7], ['2026-10-09', 20], ['2026-10-08', 7]]);
+    expect(stats.dailyCounts).toEqual({20: faces(20, {7: 2, 20: 1})});
+    expect(stats.streak).toEqual({current: 3, best: 5, lastDate: '2026-10-10'});
+
+    // Saving moves it to the new key; the old one is left alone.
+    service.record(9, 20, 'normal', evening);
+    expect(JSON.parse(storage.getItem(STATS_KEY)!).lifetimeRolls).toBe(51);
+    expect(JSON.parse(storage.getItem(STATS_V1_KEY)!).lifetimeRolls).toBe(50);
+    expect(service.load().lifetimeRolls).toBe(51);
   });
 
   it('keeps counting in memory when storage is unavailable', () => {
     const noStorage = new StatsService(null);
-    noStorage.record(3, 'normal', morning);
-    expect(noStorage.record(4, 'normal', morning).lifetimeRolls).toBe(2);
+    noStorage.record(3, 20, 'normal', morning);
+    expect(noStorage.record(4, 20, 'normal', morning).lifetimeRolls).toBe(2);
   });
 
   it('keeps counting in memory when a write fails', () => {
-    service.record(3, 'normal', morning);
+    service.record(3, 20, 'normal', morning);
     storage.failWrites = true;
-    expect(service.record(4, 'normal', morning).lifetimeRolls).toBe(2);
+    expect(service.record(4, 20, 'normal', morning).lifetimeRolls).toBe(2);
     expect(service.load().lifetimeRolls).toBe(2);
   });
 
   it('recovers from corrupt data', () => {
     storage.setItem(STATS_KEY, '{not json');
     expect(service.load().lifetimeRolls).toBe(0);
-    storage.setItem(STATS_KEY, JSON.stringify({lifetimeRolls: 'lots', faceCounts: [1, -2, 'x'], history: [{value: 99}]}));
+    storage.setItem(STATS_KEY, JSON.stringify({
+      lifetimeRolls: 'lots',
+      counts: {20: [1, -2, 'x'], 7: [5], 4: 'nope'},
+      history: [{value: 99, sides: 20, mode: 'normal', at: 1}, {value: 5, sides: 4, mode: 'normal', at: 1}],
+      days: [{date: 'today', value: 3, sides: 6, mode: 'normal'}],
+    }));
     const stats = service.load();
-    expect(stats.faceCounts.slice(0, 3)).toEqual([1, 0, 0]);
+    expect(stats.counts).toEqual({20: faces(20, {1: 1}), 4: [0, 0, 0, 0]});
     expect(stats.lifetimeRolls).toBe(1);
     expect(stats.history).toEqual([]);
+    expect(stats.days).toEqual([]);
   });
 
   it('caps history length', () => {
     for (let i = 0; i < HISTORY_LIMIT + 5; i++) {
-      service.record((i % 20) + 1, 'normal', morning);
+      service.record((i % 20) + 1, 20, 'normal', morning);
     }
     expect(service.load().history.length).toBe(HISTORY_LIMIT);
   });
 
   it('rejects impossible values', () => {
-    expect(() => service.record(0, 'normal')).toThrowError();
-    expect(() => service.record(21, 'normal')).toThrowError();
+    expect(() => service.record(0, 20, 'normal')).toThrowError();
+    expect(() => service.record(21, 20, 'normal')).toThrowError();
+    expect(() => service.record(5, 4, 'normal')).toThrowError();
+    expect(() => service.record(3, 7 as never, 'normal')).toThrowError();
   });
 
-  it('reset clears everything, including the legacy key', () => {
+  it('reset clears everything, including older keys', () => {
     storage.setItem(LEGACY_LIFETIME_KEY, '41');
-    service.record(10, 'normal', morning);
+    storage.setItem(STATS_V1_KEY, JSON.stringify({lifetimeRolls: 3}));
+    service.record(10, 20, 'normal', morning);
     service.reset();
     expect(service.load().lifetimeRolls).toBe(0);
     expect(storage.getItem(LEGACY_LIFETIME_KEY)).toBeNull();
+    expect(storage.getItem(STATS_V1_KEY)).toBeNull();
   });
 
-  it('summarizes face counts', () => {
-    const stats = sanitize({faceCounts: [2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]});
-    expect(summarize(stats)).toEqual({trackedRolls: 4, nat20s: 1, nat1s: 2, average: (1 + 1 + 10 + 20) / 4});
-    expect(summarize(sanitize(null)).average).toBeNull();
+  it('summarizes each die', () => {
+    const stats = sanitize({counts: {20: faces(20, {1: 2, 10: 1, 20: 1}), 6: faces(6, {6: 3})}});
+    expect(dieSummaries(stats.counts)).toEqual([
+      {sides: 20, rolls: 4, faces: faces(20, {1: 2, 10: 1, 20: 1}), average: (1 + 1 + 10 + 20) / 4},
+      {sides: 6, rolls: 3, faces: faces(6, {6: 3}), average: 6},
+    ]);
+    expect(countTotals(stats.counts)).toEqual({rolls: 7, crits: 4, critFails: 2});
+    expect(dieSummaries(sanitize(null).counts)).toEqual([]);
   });
 
   describe('streaks', () => {
-    const day = (d: number, hour = 9) => new Date(2026, 9, d, hour, 0);
-
     it('counts consecutive days, not rolls', () => {
-      service.record(10, 'normal', day(10));
-      service.record(11, 'normal', day(10, 22));
-      service.record(12, 'normal', day(11));
-      const stats = service.record(13, 'normal', day(12));
+      service.record(10, 20, 'normal', day(10));
+      service.record(11, 20, 'normal', day(10, 22));
+      service.record(12, 20, 'normal', day(11));
+      const stats = service.record(13, 20, 'normal', day(12));
       expect(stats.streak).toEqual({current: 3, best: 3, lastDate: '2026-10-12'});
       expect(activeStreak(stats, day(12))).toBe(3);
     });
 
     it('stays alive through the next day, then breaks', () => {
-      const stats = service.record(10, 'normal', day(10));
+      const stats = service.record(10, 20, 'normal', day(10));
       expect(activeStreak(stats, day(11, 23))).toBe(1);
       expect(streakAtRisk(stats, day(11))).toBe(true);
       expect(streakAtRisk(stats, day(10))).toBe(false);
@@ -158,9 +226,9 @@ describe('StatsService', () => {
     });
 
     it('restarts after a missed day but remembers the best', () => {
-      service.record(10, 'normal', day(10));
-      service.record(10, 'normal', day(11));
-      const stats = service.record(10, 'normal', day(13));
+      service.record(10, 20, 'normal', day(10));
+      service.record(10, 20, 'normal', day(11));
+      const stats = service.record(10, 20, 'normal', day(13));
       expect(stats.streak).toEqual({current: 1, best: 2, lastDate: '2026-10-13'});
     });
 
@@ -171,14 +239,14 @@ describe('StatsService', () => {
       expect(addDays('2026-03-08', 1)).toBe('2026-03-09');
     });
 
-    it('rebuilds streaks from history saved before they were tracked', () => {
-      const at = (d: number) => ({value: 10, mode: 'normal' as const, at: day(d).getTime()});
-      expect(streakFromHistory([at(12), at(12), at(11), at(8), at(7), at(6), at(5)]))
+    it('rebuilds streaks from the days rolled when none was stored', () => {
+      expect(streakFromDates(['2026-10-12', '2026-10-12', '2026-10-11', '2026-10-08', '2026-10-07', '2026-10-06', '2026-10-05']))
         .toEqual({current: 2, best: 4, lastDate: '2026-10-12'});
-      expect(streakFromHistory([])).toEqual({current: 0, best: 0, lastDate: null});
+      expect(streakFromDates([])).toEqual({current: 0, best: 0, lastDate: null});
 
-      storage.setItem(STATS_KEY, JSON.stringify({lifetimeRolls: 2, history: [at(11), at(10)]}));
-      expect(service.record(4, 'normal', day(12)).streak.current).toBe(3);
+      const at = (d: number) => ({value: 10, mode: 'normal', at: day(d).getTime()});
+      storage.setItem(STATS_V1_KEY, JSON.stringify({lifetimeRolls: 2, history: [at(11), at(10)]}));
+      expect(service.record(4, 20, 'normal', day(12)).streak.current).toBe(3);
     });
 
     it('ignores a malformed stored streak', () => {
@@ -187,3 +255,8 @@ describe('StatsService', () => {
     });
   });
 });
+
+/** A die's face counts with the given faces filled in, e.g. faces(6, {6: 3}). */
+function faces(sides: number, set: Record<number, number>): number[] {
+  return Array.from({length: sides}, (_, i) => set[i + 1] ?? 0);
+}

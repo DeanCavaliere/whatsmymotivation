@@ -1,5 +1,13 @@
 export type RollMode = 'normal' | 'advantage' | 'disadvantage';
 
+export type DieSides = 4 | 6 | 8 | 10 | 12 | 20;
+
+export const DIE_SIDES: readonly DieSides[] = [20, 12, 10, 8, 6, 4];
+
+export function isDieSides(n: unknown): n is DieSides {
+  return DIE_SIDES.includes(n as DieSides);
+}
+
 export type Tier = 'crit-fail' | 'very-low' | 'low' | 'mid' | 'high' | 'very-high' | 'crit-success';
 
 export type Celebration = 'confetti' | 'tears' | null;
@@ -43,19 +51,35 @@ export const MESSAGES: Record<Tier, readonly string[]> = {
   ],
   'crit-success': [
     'Critical success! Carpe diem!',
-    'Natural 20! Today is legendary.',
+    'Natural {max}! Today is legendary.',
     'Max motivation unlocked. Go conquer the world.',
   ],
 };
 
-export function tierFor(value: number): Tier {
+/**
+ * 1 and the top face are always crits. Faces in between are placed on the d20's
+ * scale, so a 3 on a d4 counts like a 14 on a d20.
+ */
+export function tierFor(value: number, sides: DieSides = 20): Tier {
   if (value <= 1) return 'crit-fail';
-  if (value >= 20) return 'crit-success';
-  if (value <= 5) return 'very-low';
-  if (value <= 8) return 'low';
-  if (value <= 11) return 'mid';
-  if (value <= 14) return 'high';
+  if (value >= sides) return 'crit-success';
+  const scaled = Math.round(1 + (value - 1) * 19 / (sides - 1));
+  if (scaled <= 5) return 'very-low';
+  if (scaled <= 8) return 'low';
+  if (scaled <= 11) return 'mid';
+  if (scaled <= 14) return 'high';
   return 'very-high';
+}
+
+/** Chance of each outcome on a single roll of the die. */
+export function dieOdds(sides: DieSides): { crit: number; good: number; bad: number } {
+  const tiers = Array.from({length: sides}, (_, i) => tierFor(i + 1, sides));
+  const share = (match: Tier[]) => tiers.filter(t => match.includes(t)).length / sides;
+  return {
+    crit: 1 / sides,
+    good: share(['high', 'very-high', 'crit-success']),
+    bad: share(['crit-fail', 'very-low']),
+  };
 }
 
 export function celebrationFor(tier: Tier): Celebration {
@@ -72,15 +96,15 @@ export function celebrationFor(tier: Tier): Celebration {
 }
 
 /** `random` is injectable so the message choice is deterministic in tests. */
-export function verdictFor(value: number, random: () => number = Math.random): Verdict {
-  const tier = tierFor(value);
+export function verdictFor(value: number, sides: DieSides = 20, random: () => number = Math.random): Verdict {
+  const tier = tierFor(value, sides);
   const options = MESSAGES[tier];
-  const message = options[Math.min(options.length - 1, Math.floor(random() * options.length))];
+  const message = options[Math.min(options.length - 1, Math.floor(random() * options.length))].replace('{max}', String(sides));
   return { tier, message, celebration: celebrationFor(tier) };
 }
 
-export function diceNotation(mode: RollMode): string {
-  return mode === 'normal' ? '1d20' : '2d20';
+export function diceNotation(mode: RollMode, sides: DieSides = 20): string {
+  return `${mode === 'normal' ? 1 : 2}d${sides}`;
 }
 
 /** Picks the die that counts: highest with advantage, lowest with disadvantage. */
@@ -93,16 +117,16 @@ export function keptValue(values: readonly number[], mode: RollMode): number {
   return values[0];
 }
 
-/** Uniform 1..20, used when 3D dice are unavailable (no WebGL, failed init). */
-export function randomD20(): number {
+/** Uniform 1..sides, used when 3D dice are unavailable (no WebGL, failed init). */
+export function randomFace(sides: DieSides = 20): number {
   if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
     // Rejection sampling avoids modulo bias.
     const buf = new Uint32Array(1);
-    const limit = Math.floor(0x100000000 / 20) * 20;
+    const limit = Math.floor(0x100000000 / sides) * sides;
     do {
       crypto.getRandomValues(buf);
     } while (buf[0] >= limit);
-    return (buf[0] % 20) + 1;
+    return (buf[0] % sides) + 1;
   }
-  return Math.floor(Math.random() * 20) + 1;
+  return Math.floor(Math.random() * sides) + 1;
 }

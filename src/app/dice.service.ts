@@ -1,6 +1,6 @@
 import {Injectable, NgZone} from '@angular/core';
 import DiceBox from '@3d-dice/dice-box';
-import {diceNotation, randomD20, RollMode} from './motivation';
+import {diceNotation, DieSides, randomFace, RollMode} from './motivation';
 
 /** A roll should settle in a few seconds; past this we stop waiting on the 3D dice. */
 const ROLL_TIMEOUT_MS = 15000;
@@ -55,21 +55,21 @@ export class DiceService {
   }
 
   /** Resolves with every die's value (one for normal, two for advantage/disadvantage). */
-  async roll(mode: RollMode, themeColor?: string): Promise<number[]> {
+  async roll(mode: RollMode, sides: DieSides = 20, themeColor?: string): Promise<number[]> {
     const count = mode === 'normal' ? 1 : 2;
-    const fallback = () => Array.from({length: count}, randomD20);
+    const fallback = () => Array.from({length: count}, () => randomFace(sides));
 
     if (!this.box) {
       await delay(450);
       return fallback();
     }
 
-    const rolled: Promise<number[]> = this.zone.runOutsideAngular(() => this.box.roll(diceNotation(mode), themeColor ? {themeColor} : {}))
+    const rolled: Promise<number[]> = this.zone.runOutsideAngular(() => this.box.roll(diceNotation(mode, sides), themeColor ? {themeColor} : {}))
       .then((dice: { value: number }[]) => dice.map(d => d.value));
     const timedOut = delay(ROLL_TIMEOUT_MS).then(() => null);
     const values = await Promise.race([rolled, timedOut]);
 
-    if (!values || values.length !== count || values.some(v => !(v >= 1 && v <= 20))) {
+    if (!values || values.length !== count || values.some(v => !(v >= 1 && v <= sides))) {
       this.zone.runOutsideAngular(() => this.box?.clear());
       return fallback();
     }

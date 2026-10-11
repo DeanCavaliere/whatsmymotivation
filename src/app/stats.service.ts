@@ -1,5 +1,5 @@
 import {Inject, Injectable, InjectionToken} from '@angular/core';
-import {RollMode} from './motivation';
+import {DIE_SIDES, DieSides, isDieSides, RollMode} from './motivation';
 
 export type KeyValueStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
@@ -19,23 +19,36 @@ export const STATS_STORAGE = new InjectionToken<KeyValueStorage | null>('STATS_S
   },
 });
 
-export const STATS_KEY = 'wmm.stats.v1';
+/**
+ * A new key rather than a new shape under the old one: after a deploy the service worker
+ * can still serve the previous version once, and it would drop fields it doesn't know.
+ */
+export const STATS_KEY = 'wmm.stats.v2';
+/** d20-only stats, before per-die and daily tracking. Migrated on first load. */
+export const STATS_V1_KEY = 'wmm.stats.v1';
 export const LEGACY_LIFETIME_KEY = 'lifetimeRolls';
 export const HISTORY_LIMIT = 20;
+export const DAYS_LIMIT = 30;
 
 export interface RollRecord {
   value: number;
+  sides: DieSides;
   mode: RollMode;
   /** Epoch milliseconds. */
   at: number;
 }
 
-export interface TodayRoll {
+/** The first roll of a day: the one that counts as that day's motivation. */
+export interface DayRoll {
   /** Local calendar date, YYYY-MM-DD. */
   date: string;
   value: number;
+  sides: DieSides;
   mode: RollMode;
 }
+
+/** counts[sides][face - 1] is how many times that face was the kept roll on that die. */
+export type FaceCounts = Partial<Record<DieSides, number[]>>;
 
 export interface Streak {
   /** Consecutive local days with at least one roll, ending on `lastDate`. */
@@ -46,31 +59,44 @@ export interface Streak {
 }
 
 export interface Stats {
-  version: 1;
-  /** Includes rolls made before per-face tracking existed, so it can exceed sum(faceCounts). */
+  version: 2;
+  /** Includes rolls made before per-face tracking existed, so it can exceed the tracked counts. */
   lifetimeRolls: number;
-  /** faceCounts[i] is how many times face i + 1 was the kept roll. */
-  faceCounts: number[];
+  /** Every roll. */
+  counts: FaceCounts;
+  /** Only each day's first roll. */
+  dailyCounts: FaceCounts;
   /** Newest first. */
   history: RollRecord[];
-  today: TodayRoll | null;
+  /** Each day's first roll, newest first. */
+  days: DayRoll[];
   streak: Streak;
 }
 
-export interface StatsSummary {
-  trackedRolls: number;
-  nat20s: number;
-  nat1s: number;
-  average: number | null;
+export interface DieSummary {
+  sides: DieSides;
+  rolls: number;
+  /** faces[i] is how many times face i + 1 came up. */
+  faces: number[];
+  average: number;
+}
+
+export interface CountTotals {
+  rolls: number;
+  /** The die's top face. */
+  crits: number;
+  /** Natural 1s. */
+  critFails: number;
 }
 
 export function emptyStats(): Stats {
   return {
-    version: 1,
+    version: 2,
     lifetimeRolls: 0,
-    faceCounts: new Array(20).fill(0),
+    counts: {},
+    dailyCounts: {},
     history: [],
-    today: null,
+    days: [],
     streak: {current: 0, best: 0, lastDate: null},
   };
 }
@@ -80,10 +106,17 @@ export function localDateKey(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+/** The local midnight a YYYY-MM-DD key refers to. */
+export function dateFromKey(dateKey: string): Date {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
 /** Shifts a YYYY-MM-DD key by whole local days (DST-safe). */
 export function addDays(dateKey: string, days: number): string {
-  const [y, m, d] = dateKey.split('-').map(Number);
-  return localDateKey(new Date(y, m - 1, d + days));
+  const date = dateFromKey(dateKey);
+  date.setDate(date.getDate() + days);
+  return localDateKey(date);
 }
 
 /**
@@ -101,9 +134,9 @@ export function streakAtRisk(stats: Stats, now: Date = new Date()): boolean {
   return stats.streak.lastDate === addDays(localDateKey(now), -1) && stats.streak.current > 0;
 }
 
-/** Rebuilds a streak from roll history, for data saved before streaks were tracked. */
-export function streakFromHistory(history: RollRecord[]): Streak {
-  const days = [...new Set(history.map(h => localDateKey(new Date(h.at))))].sort().reverse();
+/** Rebuilds a streak from the days rolled, for data saved before streaks were tracked. */
+export function streakFromDates(dates: string[]): Streak {
+  const days = [...new Set(dates)].sort().reverse();
   if (!days.length) {
     return {current: 0, best: 0, lastDate: null};
   }
@@ -122,56 +155,137 @@ export function streakFromHistory(history: RollRecord[]): Streak {
   return {current, best, lastDate: days[0]};
 }
 
-export function summarize(stats: Stats): StatsSummary {
-  const trackedRolls = stats.faceCounts.reduce((a, b) => a + b, 0);
-  const total = stats.faceCounts.reduce((sum, count, i) => sum + count * (i + 1), 0);
-  return {
-    trackedRolls,
-    nat20s: stats.faceCounts[19],
-    nat1s: stats.faceCounts[0],
-    average: trackedRolls ? total / trackedRolls : null,
-  };
+/** Each die that has rolls, in the order dice are offered. */
+export function dieSummaries(counts: FaceCounts): DieSummary[] {
+  return DIE_SIDES.flatMap(sides => {
+    const faces = counts[sides];
+    const rolls = faces ? sum(faces) : 0;
+    if (!faces || !rolls) {
+      return [];
+    }
+    const total = faces.reduce((acc, count, i) => acc + count * (i + 1), 0);
+    return [{sides, rolls, faces, average: total / rolls}];
+  });
 }
 
-export function todayRoll(stats: Stats, now: Date = new Date()): TodayRoll | null {
-  return stats.today?.date === localDateKey(now) ? stats.today : null;
+export function countTotals(counts: FaceCounts): CountTotals {
+  return dieSummaries(counts).reduce((t, d) => ({
+    rolls: t.rolls + d.rolls,
+    crits: t.crits + d.faces[d.sides - 1],
+    critFails: t.critFails + d.faces[0],
+  }), {rolls: 0, crits: 0, critFails: 0});
 }
 
+export function todayRoll(stats: Stats, now: Date = new Date()): DayRoll | null {
+  const today = localDateKey(now);
+  return stats.days.find(d => d.date === today) ?? null;
+}
+
+const sum = (ns: number[]) => ns.reduce((a, b) => a + b, 0);
 const isCount = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0;
-const isFace = (n: unknown): n is number => Number.isInteger(n) && (n as number) >= 1 && (n as number) <= 20;
+const isFace = (n: unknown, sides: DieSides): n is number => Number.isInteger(n) && (n as number) >= 1 && (n as number) <= sides;
 const isDateKey = (s: unknown): s is string => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 const isMode = (m: unknown): m is RollMode => m === 'normal' || m === 'advantage' || m === 'disadvantage';
 
-/** Coerces anything read from storage into a valid Stats, dropping whatever is malformed. */
+function bump(counts: FaceCounts, sides: DieSides, value: number): void {
+  (counts[sides] ??= new Array(sides).fill(0))[value - 1]++;
+}
+
+function sanitizeFaces(raw: unknown, sides: DieSides): number[] {
+  const list = Array.isArray(raw) ? raw : [];
+  return Array.from({length: sides}, (_, i) => isCount(list[i]) ? Math.floor(list[i]) : 0);
+}
+
+function sanitizeCounts(raw: unknown): FaceCounts {
+  const counts: FaceCounts = {};
+  if (raw && typeof raw === 'object') {
+    for (const sides of DIE_SIDES) {
+      const faces = (raw as Record<string, unknown>)[sides];
+      if (faces !== undefined) {
+        counts[sides] = sanitizeFaces(faces, sides);
+      }
+    }
+  }
+  return counts;
+}
+
+type Roll = Pick<RollRecord, 'value' | 'sides' | 'mode'>;
+
+/** Version 1 rolls had no `sides`: they were all d20s. */
+function sanitizeRoll(raw: unknown): (Roll & Record<string, unknown>) | null {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+  const r = raw as Record<string, unknown>;
+  const sides = r['sides'] === undefined ? 20 : r['sides'];
+  if (!isDieSides(sides) || !isFace(r['value'], sides) || !isMode(r['mode'])) {
+    return null;
+  }
+  return {...r, value: r['value'], sides, mode: r['mode']};
+}
+
+function sanitizeRecord(raw: unknown): RollRecord | null {
+  const r = sanitizeRoll(raw);
+  return r && isCount(r['at']) ? {value: r.value, sides: r.sides, mode: r.mode, at: r['at']} : null;
+}
+
+function sanitizeDay(raw: unknown): DayRoll | null {
+  const r = sanitizeRoll(raw);
+  return r && isDateKey(r['date']) ? {date: r['date'], value: r.value, sides: r.sides, mode: r.mode} : null;
+}
+
+/** For version 1 data: each day's earliest roll still in history, plus the stored "today". */
+function daysFromHistory(history: RollRecord[], today: DayRoll | null): DayRoll[] {
+  const byDate = new Map<string, DayRoll>();
+  for (const h of history) {
+    // History is newest first, so later entries for the same date are earlier rolls.
+    const date = localDateKey(new Date(h.at));
+    byDate.set(date, {date, value: h.value, sides: h.sides, mode: h.mode});
+  }
+  if (today) {
+    byDate.set(today.date, today);
+  }
+  return [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date)).slice(0, DAYS_LIMIT);
+}
+
+function countsFromDays(days: DayRoll[]): FaceCounts {
+  const counts: FaceCounts = {};
+  days.forEach(d => bump(counts, d.sides, d.value));
+  return counts;
+}
+
+/**
+ * Coerces anything read from storage into a valid Stats, dropping whatever is malformed.
+ * Also upgrades version 1 data (d20 only, `faceCounts` and a single `today`).
+ */
 export function sanitize(raw: unknown): Stats {
   const stats = emptyStats();
   if (!raw || typeof raw !== 'object') {
     return stats;
   }
   const r = raw as Record<string, unknown>;
-  if (Array.isArray(r['faceCounts'])) {
-    stats.faceCounts = stats.faceCounts.map((_, i) => {
-      const n = (r['faceCounts'] as unknown[])[i];
-      return isCount(n) ? Math.floor(n) : 0;
-    });
-  }
-  const tracked = stats.faceCounts.reduce((a, b) => a + b, 0);
-  stats.lifetimeRolls = Math.max(tracked, isCount(r['lifetimeRolls']) ? Math.floor(r['lifetimeRolls']) : 0);
+  stats.counts = r['counts'] !== undefined
+    ? sanitizeCounts(r['counts'])
+    : Array.isArray(r['faceCounts']) ? {20: sanitizeFaces(r['faceCounts'], 20)} : {};
+  stats.lifetimeRolls = Math.max(countTotals(stats.counts).rolls, isCount(r['lifetimeRolls']) ? Math.floor(r['lifetimeRolls']) : 0);
   if (Array.isArray(r['history'])) {
-    stats.history = (r['history'] as Partial<RollRecord>[])
-      .filter(h => h && isFace(h.value) && isMode(h.mode) && isCount(h.at))
-      .slice(0, HISTORY_LIMIT) as RollRecord[];
+    stats.history = r['history'].map(sanitizeRecord).filter(h => !!h).slice(0, HISTORY_LIMIT);
   }
-  const t = r['today'] as Partial<TodayRoll> | null | undefined;
-  if (t && typeof t.date === 'string' && isFace(t.value) && isMode(t.mode)) {
-    stats.today = {date: t.date, value: t.value, mode: t.mode};
+  if (Array.isArray(r['days'])) {
+    stats.days = r['days'].map(sanitizeDay).filter(d => !!d).slice(0, DAYS_LIMIT);
+  } else {
+    stats.days = daysFromHistory(stats.history, sanitizeDay(r['today']));
   }
+  stats.dailyCounts = r['dailyCounts'] !== undefined ? sanitizeCounts(r['dailyCounts']) : countsFromDays(stats.days);
   const k = r['streak'] as Partial<Streak> | null | undefined;
   if (k && isCount(k.current) && isCount(k.best) && (k.lastDate === null || isDateKey(k.lastDate))) {
     const current = Math.floor(k.current);
     stats.streak = {current, best: Math.max(current, Math.floor(k.best)), lastDate: k.lastDate};
   } else {
-    stats.streak = streakFromHistory(stats.history);
+    stats.streak = streakFromDates([
+      ...stats.days.map(d => d.date),
+      ...stats.history.map(h => localDateKey(new Date(h.at))),
+    ]);
   }
   return stats;
 }
@@ -192,7 +306,7 @@ export class StatsService {
       return emptyStats();
     }
     try {
-      const raw = this.storage.getItem(STATS_KEY);
+      const raw = this.storage.getItem(STATS_KEY) ?? this.storage.getItem(STATS_V1_KEY);
       if (raw !== null) {
         return sanitize(JSON.parse(raw));
       }
@@ -204,19 +318,20 @@ export class StatsService {
 
   /**
    * Re-reads storage before writing so rolls made in another tab are not overwritten.
-   * The first roll of each local day becomes "today's roll" and extends the streak.
+   * The first roll of each local day becomes that day's roll and extends the streak.
    */
-  record(value: number, mode: RollMode, now: Date = new Date()): Stats {
-    if (!isFace(value)) {
-      throw new Error(`Not a d20 value: ${value}`);
+  record(value: number, sides: DieSides, mode: RollMode, now: Date = new Date()): Stats {
+    if (!isDieSides(sides) || !isFace(value, sides)) {
+      throw new Error(`Not a d${sides} value: ${value}`);
     }
     const stats = this.load();
     stats.lifetimeRolls++;
-    stats.faceCounts[value - 1]++;
-    stats.history = [{value, mode, at: now.getTime()}, ...stats.history].slice(0, HISTORY_LIMIT);
+    bump(stats.counts, sides, value);
+    stats.history = [{value, sides, mode, at: now.getTime()}, ...stats.history].slice(0, HISTORY_LIMIT);
     const date = localDateKey(now);
     if (!todayRoll(stats, now)) {
-      stats.today = {date, value, mode};
+      stats.days = [{date, value, sides, mode}, ...stats.days].slice(0, DAYS_LIMIT);
+      bump(stats.dailyCounts, sides, value);
     }
     const {streak} = stats;
     if (streak.lastDate !== date) {
@@ -232,6 +347,7 @@ export class StatsService {
     const stats = emptyStats();
     this.save(stats);
     try {
+      this.storage?.removeItem(STATS_V1_KEY);
       this.storage?.removeItem(LEGACY_LIFETIME_KEY);
     } catch {
       // Nothing else to clean up if storage is unavailable.
@@ -251,7 +367,7 @@ export class StatsService {
     this.memory = structuredCloneStats(stats);
   }
 
-  /** Earlier versions stored only a lifetime counter under `lifetimeRolls`. */
+  /** The first versions stored only a lifetime counter under `lifetimeRolls`. */
   private migrateLegacy(): Stats {
     const stats = emptyStats();
     const legacy = Number(JSON.parse(this.storage?.getItem(LEGACY_LIFETIME_KEY) ?? '0'));

@@ -5,7 +5,7 @@
     <dl class="hud">
       <div>
         <dt>Today</dt>
-        <dd>{{ today ? today.value : '—' }}</dd>
+        <dd>{{ today ? today.value : '—' }}@if (today && today.sides !== 20) {<small class="die-tag">on d{{ today.sides }}</small>}</dd>
       </div>
       <div [title]="streakAtRisk ? 'Roll today to keep your streak going' : 'Days in a row with a roll'">
         <dt>Streak</dt>
@@ -91,61 +91,90 @@
       <button type="button" class="btn btn-ghost btn-small" (click)="statsDialog.close()" aria-label="Close stats">✕</button>
     </header>
 
-    <dl class="tiles">
-      <div>
-        <dt>Today's roll</dt>
-        <dd [attr.data-tier]="today ? tierOf(today.value) : null">{{ today ? today.value : '—' }}</dd>
-      </div>
-      <div>
-        <dt>Day streak</dt>
-        <dd>{{ streak }}</dd>
-      </div>
-      <div>
-        <dt>Best streak</dt>
-        <dd>{{ stats.streak.best }}</dd>
-      </div>
-      <div>
-        <dt>Lifetime rolls</dt>
-        <dd>{{ stats.lifetimeRolls }}</dd>
-      </div>
-      <div>
-        <dt>This session</dt>
-        <dd>{{ sessionRolls }}</dd>
-      </div>
-      <div>
-        <dt>Average</dt>
-        <dd>{{ summary.average === null ? '—' : (summary.average | number:'1.1-1') }}</dd>
-      </div>
-      <div>
-        <dt>Natural 20s</dt>
-        <dd>{{ summary.nat20s }}</dd>
-      </div>
-      <div>
-        <dt>Natural 1s</dt>
-        <dd>{{ summary.nat1s }}</dd>
-      </div>
-    </dl>
+    <div class="tabs" role="tablist" aria-label="Which rolls to show">
+      <button type="button" role="tab" id="tab-daily" aria-controls="stats-panel"
+        [attr.aria-selected]="statsTab === 'daily'" [tabIndex]="statsTab === 'daily' ? 0 : -1"
+        (click)="setStatsTab('daily')" (keydown)="onTabKey($event)">Daily rolls</button>
+      <button type="button" role="tab" id="tab-all" aria-controls="stats-panel"
+        [attr.aria-selected]="statsTab === 'all'" [tabIndex]="statsTab === 'all' ? 0 : -1"
+        (click)="setStatsTab('all')" (keydown)="onTabKey($event)">All rolls</button>
+    </div>
 
-    @if (summary.trackedRolls > 0) {
-      <section>
-        <h3>Roll distribution</h3>
+    <div id="stats-panel" role="tabpanel" [attr.aria-labelledby]="'tab-' + statsTab">
+      @if (statsTab === 'daily') {
+        <p class="panel-note">Only your first roll each day counts here. That one is the day's motivation.</p>
+        <dl class="tiles">
+          <div>
+            <dt>Today's roll</dt>
+            <dd [attr.data-tier]="today ? tierOf(today.value, today.sides) : null">
+              {{ today ? today.value : '—' }}@if (today && today.sides !== 20) {<small class="die-tag">on d{{ today.sides }}</small>}
+            </dd>
+          </div>
+          <div>
+            <dt>Day streak</dt>
+            <dd>{{ streak }}</dd>
+          </div>
+          <div>
+            <dt>Best streak</dt>
+            <dd>{{ stats.streak.best }}</dd>
+          </div>
+          <div>
+            <dt>Days rolled</dt>
+            <dd>{{ daysRolled }}</dd>
+          </div>
+        </dl>
+      } @else {
+        <p class="panel-note">Every roll, re-rolls included.</p>
+        <dl class="tiles">
+          <div>
+            <dt>Lifetime rolls</dt>
+            <dd>{{ stats.lifetimeRolls }}</dd>
+          </div>
+          <div>
+            <dt>This session</dt>
+            <dd>{{ sessionRolls }}</dd>
+          </div>
+          <div title="Rolled the die's highest face">
+            <dt>Crits</dt>
+            <dd>{{ totals.crits }}</dd>
+          </div>
+          <div title="Rolled a 1">
+            <dt>Crit fails</dt>
+            <dd>{{ totals.critFails }}</dd>
+          </div>
+        </dl>
+      }
+
+      @if (statsView.die; as die) {
+        <div class="chart-header">
+          <h3>Roll distribution</h3>
+          @if (statsView.dice.length > 1) {
+            <div class="segmented segmented-small" role="radiogroup" aria-label="Die to chart">
+              @for (d of statsView.dice; track d.sides) {
+                <button type="button" role="radio" [attr.aria-checked]="d.sides === die.sides"
+                  (click)="setChartSides(d.sides)">d{{ d.sides }}</button>
+              }
+            </div>
+          }
+        </div>
         <svg class="chart" [attr.viewBox]="'0 -4 ' + chart.width + ' ' + (chart.height + 22)" role="img"
-          [attr.aria-label]="'Bar chart of how often each face from 1 to 20 was rolled'"
+          [attr.aria-label]="'Bar chart of how often each face of the d' + die.sides + ' was rolled'"
           (mouseleave)="hoveredBar = null">
-          <line class="chart-baseline" x1="0" [attr.x2]="chart.width - chart.gap" [attr.y1]="chart.height" [attr.y2]="chart.height"/>
-          @for (bar of bars; track bar.face) {
+          <line class="chart-baseline" [attr.x1]="statsView.bars[0].x" [attr.y1]="chart.height" [attr.y2]="chart.height"
+            [attr.x2]="statsView.bars[statsView.bars.length - 1].x + statsView.bars[statsView.bars.length - 1].width"/>
+          @for (bar of statsView.bars; track bar.face) {
             <g>
               <rect class="chart-bar" [class.is-hovered]="hoveredBar === bar"
-                [attr.x]="bar.x" [attr.y]="bar.y" [attr.width]="chart.barWidth" [attr.height]="bar.height"
+                [attr.x]="bar.x" [attr.y]="bar.y" [attr.width]="bar.width" [attr.height]="bar.height"
                 rx="3"/>
               <!-- Taller-than-the-mark hit target -->
-              <rect class="chart-hit" [attr.x]="bar.x - chart.gap / 2" y="0" [attr.width]="chart.barWidth + chart.gap"
+              <rect class="chart-hit" [attr.x]="bar.x - chart.gap / 2" y="0" [attr.width]="bar.width + chart.gap"
                 [attr.height]="chart.height + 22" (mouseenter)="hoveredBar = bar">
                 <title>{{ bar.face }}: rolled {{ bar.count }} {{ bar.count === 1 ? 'time' : 'times' }}</title>
               </rect>
-              @if (bar.face === 1 || bar.face % 5 === 0) {
+              @if (bar.labeled) {
                 <text class="chart-tick"
-                [attr.x]="bar.x + chart.barWidth / 2" [attr.y]="chart.height + 16">{{ bar.face }}</text>
+                [attr.x]="bar.x + bar.width / 2" [attr.y]="chart.height + 16">{{ bar.face }}</text>
               }
             </g>
           }
@@ -153,21 +182,49 @@
         <p class="chart-readout">
           @if (hoveredBar) {
             Rolled a <strong>{{ hoveredBar.face }}</strong> {{ hoveredBar.count }} {{ hoveredBar.count === 1 ? 'time' : 'times' }}
+            ({{ hoveredBar.count / die.rolls | percent }})
           } @else {
-            Based on {{ summary.trackedRolls }} tracked {{ summary.trackedRolls === 1 ? 'roll' : 'rolls' }}. Hover a bar for details.
+            Average <strong>{{ die.average | number:'1.1-1' }}</strong> across {{ die.rolls }}
+            {{ statsTab === 'daily' ? (die.rolls === 1 ? 'day' : 'days') : (die.rolls === 1 ? 'roll' : 'rolls') }}
+            on the d{{ die.sides }}. Hover a bar for details.
           }
         </p>
-        <h3>Recent rolls</h3>
-        <ol class="history">
-          @for (h of stats.history; track $index) {
-            <li [attr.data-tier]="tierOf(h.value)"
-            [title]="(h.at | date:'medium') + (h.mode === 'normal' ? '' : ' · ' + h.mode)">{{ h.value }}</li>
-          }
-        </ol>
-      </section>
-    } @else {
-      <p class="empty">No tracked rolls yet. Close this and roll the die!</p>
-    }
+      }
+
+      @if (statsTab === 'daily') {
+        @if (stats.days.length) {
+          <h3>Recent days</h3>
+          <ol class="history">
+            @for (d of stats.days; track d.date) {
+              <li [attr.data-tier]="tierOf(d.value, d.sides)"
+                [title]="(dateFromKey(d.date) | date:'fullDate') + (d.mode === 'normal' ? '' : ' · ' + d.mode)">
+                <span>{{ d.value }}</span>
+                <span class="history-date">{{ dateFromKey(d.date) | date:'MMM d' }}{{ d.sides === 20 ? '' : ' · d' + d.sides }}</span>
+              </li>
+            }
+          </ol>
+        } @else {
+          <p class="empty">No daily rolls yet. Your first roll each day shows up here.</p>
+        }
+      } @else {
+        @if (stats.history.length) {
+          <h3>Recent rolls</h3>
+          <ol class="history">
+            @for (h of stats.history; track $index) {
+              <li [attr.data-tier]="tierOf(h.value, h.sides)"
+                [title]="(h.at | date:'medium') + (h.mode === 'normal' ? '' : ' · ' + h.mode)">
+                <span>{{ h.value }}</span>
+                @if (h.sides !== 20) {
+                  <span class="history-date">d{{ h.sides }}</span>
+                }
+              </li>
+            }
+          </ol>
+        } @else {
+          <p class="empty">No tracked rolls yet. Close this and roll the die!</p>
+        }
+      }
+    </div>
 
     <footer class="panel-footer">
       <button type="button" class="btn btn-danger btn-small" (click)="resetStats()">
@@ -184,6 +241,36 @@
       <button type="button" class="btn btn-ghost btn-small" (click)="customizeDialog.close()" aria-label="Close">✕</button>
     </header>
 
+    <fieldset class="die-options">
+      <legend>Die</legend>
+      <div class="die-row die-head" aria-hidden="true">
+        <span></span><span>Crit</span><span>Good day</span><span>Bad day</span>
+      </div>
+      @for (d of dieOptions; track d.sides) {
+        <label class="die-row">
+          <input type="radio" name="sides" [value]="d.sides" [checked]="prefs.sides === d.sides" (change)="setSides(d.sides)">
+          <span class="die-name"><strong>d{{ d.sides }}</strong> <small>{{ d.blurb }}</small></span>
+          <span><span class="visually-hidden">Crit: </span>1 in {{ d.sides }}</span>
+          <span><span class="visually-hidden">Good day: </span>{{ d.odds.good | percent }}</span>
+          <span><span class="visually-hidden">Bad day: </span>{{ d.odds.bad | percent }}</span>
+        </label>
+      }
+    </fieldset>
+    <p class="panel-note">Every die crits on its top face and fails on a 1. A good day is like a 12 or better
+      on the d20, a bad day 5 or lower. Odds are for a normal roll; advantage and disadvantage tilt them.</p>
+
+    <fieldset class="swatches">
+      <legend>Dice color</legend>
+      @for (d of diceColors; track d.id) {
+        <label class="swatch">
+          <input type="radio" name="dice" [value]="d.id" [checked]="prefs.dice === d.id" (change)="setDice(d.id)">
+          <span class="swatch-chip swatch-die" [style.--chip]="d.color"></span>
+          {{ d.label }}
+        </label>
+      }
+    </fieldset>
+    <p class="panel-note">Your next roll uses the new die and color.</p>
+
     <fieldset class="swatches">
       <legend>Table</legend>
       @for (t of tableThemes; track t.id) {
@@ -194,18 +281,6 @@
         </label>
       }
     </fieldset>
-
-    <fieldset class="swatches">
-      <legend>Dice</legend>
-      @for (d of diceColors; track d.id) {
-        <label class="swatch">
-          <input type="radio" name="dice" [value]="d.id" [checked]="prefs.dice === d.id" (change)="setDice(d.id)">
-          <span class="swatch-chip swatch-die" [style.--chip]="d.color"></span>
-          {{ d.label }}
-        </label>
-      }
-    </fieldset>
-    <p class="panel-note">The new dice color shows up on your next roll.</p>
 
     @if (install) {
       <h3>App</h3>

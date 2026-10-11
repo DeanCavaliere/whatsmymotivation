@@ -14,26 +14,26 @@ describe('PrefsService', () => {
     };
   });
 
-  it('defaults to the classic table and gold dice', () => {
+  it('defaults to the classic table and a gold d20', () => {
     expect(new PrefsService(storage).load()).toEqual(DEFAULT_PREFS);
   });
 
   it('saves and reloads choices', () => {
-    new PrefsService(storage).save({table: 'royal', dice: 'ruby'});
-    expect(new PrefsService(storage).load()).toEqual({table: 'royal', dice: 'ruby'});
+    new PrefsService(storage).save({table: 'royal', dice: 'ruby', sides: 6});
+    expect(new PrefsService(storage).load()).toEqual({table: 'royal', dice: 'ruby', sides: 6});
   });
 
   it('ignores unknown or corrupt values', () => {
-    store.set(PREFS_KEY, JSON.stringify({table: 'lava', dice: 'ruby'}));
-    expect(new PrefsService(storage).load()).toEqual({table: 'classic', dice: 'ruby'});
+    store.set(PREFS_KEY, JSON.stringify({table: 'lava', dice: 'ruby', sides: 7}));
+    expect(new PrefsService(storage).load()).toEqual({table: 'classic', dice: 'ruby', sides: 20});
     store.set(PREFS_KEY, '{oops');
     expect(new PrefsService(storage).load()).toEqual(DEFAULT_PREFS);
   });
 
   it('keeps choices for the session without storage', () => {
     const prefs = new PrefsService(null);
-    prefs.save({table: 'plum', dice: 'ivory'});
-    expect(prefs.load()).toEqual({table: 'plum', dice: 'ivory'});
+    prefs.save({table: 'plum', dice: 'ivory', sides: 4});
+    expect(prefs.load()).toEqual({table: 'plum', dice: 'ivory', sides: 4});
   });
 
   it('falls back to the first theme for unknown ids', () => {
