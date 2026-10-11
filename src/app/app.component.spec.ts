@@ -40,6 +40,9 @@ describe('AppComponent', () => {
     HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
       this.open = true;
     };
+    HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
+      this.open = false;
+    };
     store = new Map();
     const storage: KeyValueStorage = {
       getItem: k => store.get(k) ?? null,
@@ -171,33 +174,68 @@ describe('AppComponent', () => {
       expect(app.stats.counts[6]).toEqual([0, 0, 0, 0, 0, 1]);
     });
 
-    it('nudges the table once a week to replace today\'s roll', async () => {
+    it('spends a ✦ to reroll today\'s roll, but only after confirming', async () => {
       dice.next = [3];
       await app.roll();
       fixture.detectChanges();
-      const nudgeButton = () => [...fixture.nativeElement.querySelectorAll('.result-actions button')]
-        .find((b: HTMLButtonElement) => b.textContent!.includes('Nudge')) as HTMLButtonElement | undefined;
+      const el: HTMLElement = fixture.nativeElement;
+      const rerollButton = () => [...el.querySelectorAll('.result-actions button')]
+        .find(b => b.textContent!.includes('Reroll')) as HTMLButtonElement | undefined;
+      const dialog = el.querySelector('dialog[aria-labelledby="reroll-title"]') as HTMLDialogElement;
 
       dice.next = [17];
-      nudgeButton()!.click();
+      rerollButton()!.click();
+      fixture.detectChanges();
+      expect(dialog.open).toBe(true);
+      expect(dialog.textContent).toContain('Reroll today\'s 3?');
+      expect(dialog.textContent).toContain('It\'s your last one.');
+      expect(app.today?.value).toBe(3);
+
+      (dialog.querySelector('.btn-primary') as HTMLButtonElement).click();
       await fixture.whenStable();
       fixture.detectChanges();
-
+      expect(dialog.open).toBe(false);
       expect(app.today?.value).toBe(17);
-      expect(app.result?.nudgedFrom?.value).toBe(3);
-      expect(fixture.nativeElement.querySelector('.result-label').textContent).toContain('nudged');
-      expect(fixture.nativeElement.querySelector('.result-sub').textContent).toContain('was 3');
-      expect(nudgeButton()).toBeUndefined();
+      expect(app.result?.rerolledFrom?.value).toBe(3);
+      expect(app.stats.inspiration.held).toBe(0);
+      expect(el.querySelector('.result-label')!.textContent).toContain('rerolled');
+      expect(el.querySelector('.result-sub')!.textContent).toContain('was 3');
+      expect(rerollButton()).toBeUndefined();
     });
 
-    it('keeps a natural 1\'s crack through practice rolls until a nudge replaces it', async () => {
+    it('keeps the roll when the reroll is turned down', async () => {
+      dice.next = [3];
+      await app.roll();
+      fixture.detectChanges();
+      app.askReroll();
+      fixture.detectChanges();
+      const dialog = fixture.nativeElement.querySelector('dialog[aria-labelledby="reroll-title"]') as HTMLDialogElement;
+      const keep = dialog.querySelector('.btn-ghost') as HTMLButtonElement;
+      expect(keep.hasAttribute('autofocus')).toBe(true);
+      keep.click();
+      expect(dialog.open).toBe(false);
+      expect(app.today?.value).toBe(3);
+      expect(app.stats.inspiration.held).toBe(1);
+    });
+
+    it('shows ✦ earned for a natural top face, with a pointer the first time', async () => {
+      dice.next = [20];
+      await app.roll();
+      fixture.detectChanges();
+      expect(app.result!.inspiration).toEqual({reasons: ['natural'], kept: 1, first: true});
+      const pills = [...fixture.nativeElement.querySelectorAll('.result-badge')].map((p: Element) => p.textContent);
+      expect(pills.some(t => t.includes('+1 Inspiration') && t.includes('For a natural 20') && t.includes('Tap ✦ up top'))).toBe(true);
+      expect(fixture.nativeElement.querySelector('.hud-button').textContent).toContain('2');
+    });
+
+    it('keeps a natural 1\'s crack through practice rolls until a reroll replaces it', async () => {
       dice.next = [1];
       await app.roll();
       expect(app.crack).not.toBeNull();
       dice.next = [15];
       await app.roll();
       expect(app.crack).not.toBeNull();
-      await app.nudge();
+      await app.reroll();
       expect(app.crack).toBeNull();
     });
 
@@ -247,7 +285,7 @@ describe('AppComponent', () => {
       app.setStatsTab('badges');
       fixture.detectChanges();
       const el: HTMLElement = fixture.nativeElement;
-      expect(el.querySelector('.badge-count')!.textContent!.replace(/\s+/g, ' ')).toContain('3 of 12 badges earned');
+      expect(el.querySelector('.badge-count')!.textContent!.replace(/\s+/g, ' ')).toContain('3 of 15 badges earned');
       expect(el.querySelectorAll('.badge:not(.is-locked)').length).toBe(3);
       expect(el.querySelector('.badge.is-locked .badge-progress')!.textContent).toContain('1 of 6 dice');
     });
@@ -263,12 +301,13 @@ describe('AppComponent', () => {
       expect(app.statsTab).toBe('daily');
     });
 
-    it('hides the nudge when it is switched off', async () => {
-      (fixture.nativeElement.querySelector('.switch') as HTMLInputElement).click();
+    it('hides Inspiration when it is switched off', async () => {
+      (fixture.nativeElement.querySelector('#rerolls-switch') as HTMLInputElement).click();
       await app.roll();
       fixture.detectChanges();
-      expect(app.prefs.nudge).toBe(false);
-      expect(fixture.nativeElement.querySelector('.result-actions').textContent).not.toContain('Nudge');
+      expect(app.prefs.rerolls).toBe(false);
+      expect(fixture.nativeElement.querySelector('.result-actions').textContent).not.toContain('Reroll');
+      expect(fixture.nativeElement.querySelector('.hud-button')).toBeNull();
     });
 
     it('shows daily and all-roll stats on separate tabs', async () => {
@@ -300,7 +339,7 @@ describe('AppComponent', () => {
       vi.setSystemTime(new Date(2026, 9, 10, 9));
       store.set(STATS_KEY, JSON.stringify({
         days: [
-          {date: '2026-10-10', value: 17, sides: 20, mode: 'advantage', nudgedFrom: {value: 3, sides: 20}},
+          {date: '2026-10-10', value: 17, sides: 20, mode: 'advantage', rerolledFrom: {value: 3, sides: 20}},
           {date: '2026-10-08', value: 1, sides: 20, mode: 'normal'},
           {date: '2026-09-20', value: 20, sides: 20, mode: 'normal'},
         ],
@@ -316,13 +355,13 @@ describe('AppComponent', () => {
       expect(el().querySelector('#calendar-title')!.textContent).toBe('October 2026');
       expect(el().querySelector('.calendar-summary')!.textContent!.replace(/\s+/g, ' ')).toContain('2 days rolled · average 9.0 · 0 crits');
       expect(el().querySelector('.calendar-day[aria-pressed="true"]')!.getAttribute('aria-label'))
-        .toBe('Saturday, October 10, today, rolled 17, nudged from 3');
-      expect(el().querySelector('.calendar-details')!.textContent).toContain('Nudged from a 3.');
+        .toBe('Saturday, October 10, today, rolled 17, rerolled from 3');
+      expect(el().querySelector('.calendar-details')!.textContent).toContain('Rerolled from a 3.');
     });
 
-    it('marks crits, crit fails and nudges', () => {
+    it('marks crits, crit fails and rerolls', () => {
       expect(el().querySelector('#day-2026-10-08 .calendar-crack')).not.toBeNull();
-      expect(el().querySelector('#day-2026-10-10 .calendar-nudge')).not.toBeNull();
+      expect(el().querySelector('#day-2026-10-10 .calendar-reroll')).not.toBeNull();
     });
 
     it('moves by day and week with the arrow keys, but not into the future', () => {

@@ -74,8 +74,8 @@ export interface Prefs {
   /** Dice color id. */
   dice: string;
   sides: DieSides;
-  /** Show the once-a-week "Nudge the table" re-roll. */
-  nudge: boolean;
+  /** Show Inspiration: the ✦ counter and rerolling the day's roll. */
+  rerolls: boolean;
   /** Switch to the seasonal table, dice and messages on their dates. */
   seasonal: boolean;
   /** A season the player turned off by picking their own table or dice (see `seasonKey`). */
@@ -86,7 +86,7 @@ export interface Prefs {
 }
 
 export const DEFAULT_PREFS: Prefs = {
-  table: 'classic', accent: 'copper', dice: 'gold', sides: 20, nudge: true, seasonal: true, seasonOff: null, sound: true, vibration: true,
+  table: 'classic', accent: 'copper', dice: 'gold', sides: 20, rerolls: true, seasonal: true, seasonOff: null, sound: true, vibration: true,
 };
 
 export function tableTheme(id: string): TableTheme {
@@ -124,7 +124,7 @@ export class PrefsService {
         accent: ACCENTS.some(a => a.id === accent) ? accent as string : DEFAULT_PREFS.accent,
         dice: DICE_COLORS.some(d => d.id === dice) ? dice as string : DEFAULT_PREFS.dice,
         sides: isDieSides(sides) ? sides : DEFAULT_PREFS.sides,
-        nudge: typeof raw?.['nudge'] === 'boolean' ? raw['nudge'] as boolean : DEFAULT_PREFS.nudge,
+        rerolls: typeof raw?.['rerolls'] === 'boolean' ? raw['rerolls'] as boolean : DEFAULT_PREFS.rerolls,
         seasonal: typeof raw?.['seasonal'] === 'boolean' ? raw['seasonal'] as boolean : DEFAULT_PREFS.seasonal,
         seasonOff: typeof raw?.['seasonOff'] === 'string' ? raw['seasonOff'] as string : null,
         sound: typeof raw?.['sound'] === 'boolean' ? raw['sound'] as boolean : DEFAULT_PREFS.sound,

@@ -2,7 +2,7 @@ import {BADGES, newBadges, RollContext} from './achievements';
 import {emptyStats, Stats} from './stats.service';
 
 function roll(value: number, extra: Partial<RollContext> = {}): RollContext {
-  return {values: [value], value, sides: 20, mode: 'normal', isDayRoll: true, date: '2026-10-10', ...extra};
+  return {values: [value], value, sides: 20, mode: 'normal', isDayRoll: true, rerolledFrom: null, date: '2026-10-10', ...extra};
 }
 
 function stats(extra: Partial<Stats> = {}): Stats {
@@ -58,6 +58,18 @@ describe('badges', () => {
   it('give Regular and Devoted at 100 and 1,000 rolls', () => {
     expect(ids(stats({lifetimeRolls: 99}), roll(10))).not.toContain('rolls-100');
     expect(ids(stats({lifetimeRolls: 1000}), roll(10))).toEqual(expect.arrayContaining(['rolls-100', 'rolls-1000']));
+  });
+
+  it('give Hoarder for holding three ✦ and Big spender for five rerolls', () => {
+    expect(ids(stats({inspiration: {held: 3, earned: 2}}), roll(10))).toContain('hoarder');
+    expect(ids(stats({inspiration: {held: 2, earned: 1}}), roll(10))).not.toContain('hoarder');
+    expect(ids(stats({rerolls: {used: 5, better: 3, worse: 2}}), roll(10))).toContain('big-spender');
+  });
+
+  it('give Lucky reroll for rerolling a natural 1 into the top face', () => {
+    expect(ids(stats(), roll(20, {rerolledFrom: 1}))).toContain('lucky-reroll');
+    expect(ids(stats(), roll(20, {rerolledFrom: 2}))).not.toContain('lucky-reroll');
+    expect(ids(stats(), roll(20))).not.toContain('lucky-reroll');
   });
 
   it('are only new once', () => {

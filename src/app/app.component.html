@@ -16,6 +16,17 @@
         <dt>Lifetime</dt>
         <dd>{{ stats.lifetimeRolls }}</dd>
       </div>
+      @if (prefs.rerolls) {
+        <div>
+          <dt id="inspiration-label">Inspiration</dt>
+          <dd>
+            <button type="button" class="hud-button" (click)="openInspiration()" aria-haspopup="dialog"
+              aria-describedby="inspiration-label" title="How Inspiration works">
+              <span aria-hidden="true">✦</span> {{ stats.inspiration.held }}@if (stats.inspiration.held >= inspirationCap) {<small>full</small>}
+            </button>
+          </dd>
+        </div>
+      }
     </dl>
 
     <div class="controls">
@@ -56,7 +67,7 @@
     </div>
   </header>
 
-  <main #table class="table" [class.is-nudged]="tableNudged" [class.is-jolted]="tableJolted" [class.is-drained]="tableDrained">
+  <main #table class="table" [class.is-shaken]="tableShaken" [class.is-jolted]="tableJolted" [class.is-drained]="tableDrained">
     @if (season; as s) {
       <div class="doodles" [class.is-dimmed]="result" aria-hidden="true">
         @for (d of s.doodles; track $index) {
@@ -99,7 +110,7 @@
         @if (r.dropped !== null) {
           <div class="result-dropped">dropped {{ r.dropped }}</div>
         }
-        @if (r.nudgedFrom; as from) {
+        @if (r.rerolledFrom; as from) {
           <div class="result-sub">was {{ from.value }}{{ from.sides === r.sides ? '' : ' on d' + from.sides }}</div>
         }
         <p class="result-message">{{ r.verdict.message }}</p>
@@ -112,11 +123,25 @@
             <span><small>{{ r.badges.length === 1 ? 'Badge unlocked' : r.badges.length + ' badges unlocked' }}</small>{{ badgeNames(r.badges) }}</span>
           </p>
         }
+        @if (prefs.rerolls && r.inspiration; as gain) {
+          <p class="result-badge">
+            <span class="result-badge-icon" aria-hidden="true">✦</span>
+            <span>
+              <small>{{ gain.kept ? '+' + gain.kept + ' Inspiration' : 'Inspiration full' }}</small>{{ inspirationReason(gain, r.sides) }}
+              @if (gain.first) {
+                <span class="result-badge-hint">Tap ✦ up top to see how it works.</span>
+              } @else if (!gain.kept) {
+                <span class="result-badge-hint">Spend one to earn more.</span>
+              }
+            </span>
+          </p>
+        }
         <div class="result-actions">
           <button type="button" class="btn btn-ghost btn-small" (click)="share()">Share</button>
-          @if (r.isToday && canNudge) {
-            <button type="button" class="btn btn-ghost btn-small" (click)="nudge()"
-              title="Re-roll today's roll. You get one nudge a week, and it comes back every Sunday.">Nudge the table</button>
+          @if (r.isToday && canReroll) {
+            <button type="button" class="btn btn-ghost btn-small" (click)="askReroll()" aria-haspopup="dialog">
+              Reroll <span class="result-cost">· 1 <span aria-hidden="true">✦</span><span class="visually-hidden">Inspiration</span></span>
+            </button>
           }
         </div>
       }
@@ -242,8 +267,8 @@
                       } @else if (d.tier === 'crit-fail') {
                         <svg class="calendar-mark calendar-crack" viewBox="0 0 12 12" aria-hidden="true"><path d="M1 2 L5 6 L3.5 7.5 L8 11 M5 6 L9 3.5 L11 4.5"/></svg>
                       }
-                      @if (r.nudgedFrom) {
-                        <span class="calendar-nudge" aria-hidden="true">↻</span>
+                      @if (r.rerolledFrom) {
+                        <span class="calendar-reroll" aria-hidden="true">✦</span>
                       }
                     }
                   </button>
@@ -259,14 +284,14 @@
                   Better</li>
                 <li>★ Natural top face</li>
                 <li><svg class="calendar-crack" viewBox="0 0 12 12"><path d="M1 2 L5 6 L3.5 7.5 L8 11 M5 6 L9 3.5 L11 4.5"/></svg> Natural 1</li>
-                <li>↻ Nudged</li>
+                <li>✦ Rerolled</li>
               </ul>
               <div class="calendar-details" [attr.data-tier]="calendarRoll ? tierOf(calendarRoll.value, calendarRoll.sides) : null">
                 <h4>{{ dateFromKey(calendarDay) | date:'EEEE, MMMM d' }}</h4>
                 @if (calendarRoll; as r) {
                   <p class="calendar-details-roll">Rolled <strong>{{ r.value }}</strong> on the d{{ r.sides }}{{ r.mode === 'normal' ? '' : ' with ' + r.mode }}</p>
-                  @if (r.nudgedFrom; as from) {
-                    <p>Nudged from a {{ from.value }}{{ from.sides === r.sides ? '' : ' on the d' + from.sides }}.</p>
+                  @if (r.rerolledFrom; as from) {
+                    <p>Rerolled from a {{ from.value }}{{ from.sides === r.sides ? '' : ' on the d' + from.sides }}.</p>
                   }
                 } @else {
                   <p>No roll this day.</p>
@@ -353,24 +378,24 @@
         }
 
         @if (statsTab === 'daily') {
-          @if (prefs.nudge || stats.nudges.used) {
-            <h3 id="nudges-title">Nudges</h3>
-            <dl class="tiles" aria-labelledby="nudges-title">
+          @if (prefs.rerolls || stats.rerolls.used) {
+            <h3 id="rerolls-title">Rerolls</h3>
+            <dl class="tiles" aria-labelledby="rerolls-title">
               <div>
                 <dt>Used</dt>
-                <dd>{{ stats.nudges.used }}</dd>
+                <dd>{{ stats.rerolls.used }}</dd>
               </div>
               <div title="Landed higher than the roll it replaced">
                 <dt>Helped</dt>
-                <dd>{{ stats.nudges.better }}</dd>
+                <dd>{{ stats.rerolls.better }}</dd>
               </div>
               <div title="Landed lower than the roll it replaced">
                 <dt>Backfired</dt>
-                <dd>{{ stats.nudges.worse }}</dd>
+                <dd>{{ stats.rerolls.worse }}</dd>
               </div>
               <div>
-                <dt>Next nudge</dt>
-                <dd class="tile-text">{{ nudgeUsed ? 'Sunday' : 'Ready' }}</dd>
+                <dt>Inspiration</dt>
+                <dd><span aria-hidden="true">✦ </span>{{ stats.inspiration.held }}</dd>
               </div>
             </dl>
           }
@@ -380,12 +405,12 @@
             <ol class="history" aria-labelledby="recent-rolls-title">
               @for (h of stats.history; track $index) {
                 <li [attr.data-tier]="tierOf(h.value, h.sides)"
-                  [title]="(h.at | date:'medium') + (h.mode === 'normal' ? '' : ' · ' + h.mode) + (h.nudge ? ' · nudge' : '')">
+                  [title]="(h.at | date:'medium') + (h.mode === 'normal' ? '' : ' · ' + h.mode) + (h.reroll ? ' · reroll' : '')">
                   <span>{{ h.value }}</span>
                   @if (h.sides !== 20) {
                     <span class="history-date">d{{ h.sides }}</span>
                   }
-                  <span class="visually-hidden">, {{ h.at | date:'medium' }}{{ h.mode === 'normal' ? '' : ', ' + h.mode }}{{ h.nudge ? ', nudge' : '' }}</span>
+                  <span class="visually-hidden">, {{ h.at | date:'medium' }}{{ h.mode === 'normal' ? '' : ', ' + h.mode }}{{ h.reroll ? ', reroll' : '' }}</span>
                 </li>
               }
             </ol>
@@ -546,15 +571,15 @@
         </div>
       </details>
 
-      <label class="switch-row" for="nudge-switch">
+      <label class="switch-row" for="rerolls-switch">
         <span class="switch-text">
-          <strong id="nudge-label">Nudge the table</strong>
-          <small id="nudge-description">Once a week, shake the table to re-roll today's roll. Your nudge comes back every Sunday.</small>
+          <strong id="rerolls-label">Inspiration and rerolls</strong>
+          <small id="rerolls-description">Earn ✦ for a natural top face and every 7th day of a streak, and spend one to reroll the day's roll.</small>
         </span>
-        <span class="switch-state" aria-hidden="true">{{ prefs.nudge ? 'On' : 'Off' }}</span>
-        <input #nudgeSwitch id="nudge-switch" class="switch" type="checkbox" role="switch" [checked]="prefs.nudge"
-          aria-labelledby="nudge-label" aria-describedby="nudge-description"
-          (change)="setNudge(nudgeSwitch.checked)">
+        <span class="switch-state" aria-hidden="true">{{ prefs.rerolls ? 'On' : 'Off' }}</span>
+        <input #rerollsSwitch id="rerolls-switch" class="switch" type="checkbox" role="switch" [checked]="prefs.rerolls"
+          aria-labelledby="rerolls-label" aria-describedby="rerolls-description"
+          (change)="setRerolls(rerollsSwitch.checked)">
       </label>
 
       <label class="switch-row" for="sound-switch">
@@ -609,5 +634,59 @@
         }
       }
     }
+  </div>
+</dialog>
+
+<dialog #rerollDialog class="panel panel-small" aria-labelledby="reroll-title" aria-describedby="reroll-cost"
+  (click)="onDialogClick($event)">
+  <div class="panel-body">
+    <h2 id="reroll-title">Reroll today's {{ today?.value }}?</h2>
+    <p id="reroll-cost" class="panel-note">
+      This spends <strong>1 ✦ Inspiration</strong>.
+      {{ stats.inspiration.held > 1 ? 'You\'ll have ' + (stats.inspiration.held - 1) + ' left.' : 'It\'s your last one.' }}
+    </p>
+    <div class="dialog-buttons">
+      <!-- Focused first, so a stray Enter or Space keeps the roll. -->
+      <button type="button" class="btn btn-ghost" autofocus (click)="rerollDialog.close()">Keep my {{ today?.value }}</button>
+      <button type="button" class="btn btn-primary" (click)="reroll()">Reroll</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog #inspirationDialog class="panel panel-small" aria-labelledby="inspiration-title" (click)="onDialogClick($event)">
+  <div class="panel-body">
+    <header class="panel-header">
+      <h2 id="inspiration-title">How Inspiration works</h2>
+      <button type="button" class="btn btn-ghost btn-small" (click)="inspirationDialog.close()" aria-label="Close"><span aria-hidden="true">✕</span></button>
+    </header>
+    <p class="inspiration-tokens">
+      <span aria-hidden="true">
+        @for (i of [1, 2, 3]; track i) {
+          <span [class.is-empty]="i > stats.inspiration.held">✦</span>
+        }
+      </span>
+      <span class="visually-hidden">You have {{ stats.inspiration.held }} of {{ inspirationCap }}.</span>
+    </p>
+    <dl class="inspiration-rules">
+      <div>
+        <dt>Earn it</dt>
+        <dd>Roll a natural top face as your day's roll, or reach every {{ streakStep }}th day of a streak ({{ streakStep }}, {{ streakStep * 2 }}, {{ streakStep * 3 }}…).</dd>
+      </div>
+      <div>
+        <dt>Spend it</dt>
+        <dd>Reroll today's roll. The new roll replaces the day's roll, for better or worse.</dd>
+      </div>
+      <div>
+        <dt>Keep up to {{ inspirationCap }}</dt>
+        <dd>When you're full, new ✦ are lost until you spend one.</dd>
+      </div>
+    </dl>
+    <div class="inspiration-meter">
+      <p><span>Next ✦ from your streak</span><strong>{{ streak % streakStep }} of {{ streakStep }} days</strong></p>
+      <span class="progress" aria-hidden="true"><i [style.width.%]="streak % streakStep / streakStep * 100"></i></span>
+    </div>
+    <div class="dialog-buttons">
+      <button type="button" class="btn btn-primary" (click)="inspirationDialog.close()">Got it</button>
+    </div>
   </div>
 </dialog>

@@ -53,6 +53,30 @@
   color: var(--accent);
 }
 
+/* The ✦ count opens "How Inspiration works". */
+.hud-button {
+  margin: 0 -6px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.hud-button:hover {
+  background: var(--hover);
+}
+
+.hud-button small {
+  margin-left: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .controls {
   display: flex;
   align-items: center;
@@ -128,11 +152,11 @@
   container-type: size;
 }
 
-.table.is-nudged {
-  animation: nudge 420ms ease-in-out;
+.table.is-shaken {
+  animation: shake 420ms ease-in-out;
 }
 
-@keyframes nudge {
+@keyframes shake {
   0%, 100% { translate: 0 0; }
   15% { translate: -10px 2px; }
   35% { translate: 9px -2px; }
@@ -385,6 +409,17 @@
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+  color: var(--accent);
+}
+
+.result-badge-hint {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+.result-cost {
   color: var(--accent);
 }
 

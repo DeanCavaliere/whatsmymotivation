@@ -32,12 +32,15 @@ import {
   DayRoll,
   DieSummary,
   dieSummaries,
+  INSPIRATION_CAP,
+  InspirationReason,
+  inspirationReasons,
   localDateKey,
-  nudgeUsedThisWeek,
   Stats,
   STATS_KEY,
   StatsService,
   streakAtRisk,
+  STREAK_STEP,
   todayRoll,
 } from './stats.service';
 
@@ -49,13 +52,23 @@ interface RollResult {
   mode: RollMode;
   verdict: Verdict;
   isToday: boolean;
-  /** The roll a nudge replaced. */
-  nudgedFrom: { value: number; sides: DieSides } | null;
+  /** The roll a reroll replaced. */
+  rerolledFrom: { value: number; sides: DieSides } | null;
   /** Streak length after this roll, when it was today's roll. */
   streak: number;
   newBest: boolean;
   /** Badges this roll unlocked. */
   badges: Badge[];
+  inspiration: InspirationGain | null;
+}
+
+/** ✦ this roll earned. */
+interface InspirationGain {
+  reasons: InspirationReason[];
+  /** How many were kept; any more were over the cap. */
+  kept: number;
+  /** The first ✦ ever earned, which points at the counter. */
+  first: boolean;
 }
 
 interface BadgeView {
@@ -122,6 +135,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   @ViewChild('diceBox', {static: true}) diceBoxRef!: ElementRef<HTMLElement>;
   @ViewChild('statsDialog', {static: true}) statsDialogRef!: ElementRef<HTMLDialogElement>;
   @ViewChild('settingsDialog', {static: true}) settingsDialogRef!: ElementRef<HTMLDialogElement>;
+  @ViewChild('rerollDialog', {static: true}) rerollDialogRef!: ElementRef<HTMLDialogElement>;
+  @ViewChild('inspirationDialog', {static: true}) inspirationDialogRef!: ElementRef<HTMLDialogElement>;
 
   /** `label` is shortened to fit the top bar; screen readers get `name`. */
   readonly modes: { value: RollMode, label: string, name: string, hint: string }[] = [
@@ -138,6 +153,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly diceColorOf = diceColor;
   readonly tableThemeOf = tableTheme;
   readonly accentOf = accentColor;
+  readonly inspirationCap = INSPIRATION_CAP;
+  readonly streakStep = STREAK_STEP;
 
   ready = false;
   rolling = false;
@@ -149,9 +166,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   today: DayRoll | null = null;
   streak = 0;
   streakAtRisk = false;
-  nudgeUsed = false;
-  /** Briefly true while the table shakes for a nudge. */
-  tableNudged = false;
+  /** Briefly true while the table shakes for a reroll. */
+  tableShaken = false;
   /** Briefly true while the table jolts and loses its color on a natural 1. */
   tableJolted = false;
   tableDrained = false;
@@ -213,10 +229,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         mode: today.mode,
         verdict: verdictFor(today.value, today.sides, Math.random, this.season?.messages),
         isToday: true,
-        nudgedFrom: today.nudgedFrom ?? null,
+        rerolledFrom: today.rerolledFrom ?? null,
         streak: this.streak,
         newBest: false,
         badges: [],
+        inspiration: null,
       };
     }
     this.refreshCrack();
@@ -283,22 +300,34 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return this.throwDice(false);
   }
 
-  /** Once a week, shake the table and re-roll today's roll. */
-  nudge(): Promise<void> {
-    if (!this.canNudge) {
+  /** Rerolling costs a ✦, so it always asks first. */
+  askReroll(): void {
+    if (this.canReroll) {
+      this.rerollDialogRef.nativeElement.showModal();
+    }
+  }
+
+  /** Spends a ✦: shakes the table and rerolls today's roll. */
+  reroll(): Promise<void> {
+    this.rerollDialogRef.nativeElement.close();
+    if (!this.canReroll) {
       return Promise.resolve();
     }
-    this.tableNudged = true;
+    this.tableShaken = true;
     clearTimeout(this.shakeTimer);
-    this.shakeTimer = setTimeout(() => this.tableNudged = false, 500);
+    this.shakeTimer = setTimeout(() => this.tableShaken = false, 500);
     return this.throwDice(true);
   }
 
-  get canNudge(): boolean {
-    return this.prefs.nudge && !!this.today && !this.nudgeUsed;
+  get canReroll(): boolean {
+    return this.prefs.rerolls && !!this.today && this.stats.inspiration.held >= 1;
   }
 
-  private async throwDice(nudge: boolean): Promise<void> {
+  openInspiration(): void {
+    this.inspirationDialogRef.nativeElement.showModal();
+  }
+
+  private async throwDice(reroll: boolean): Promise<void> {
     if (!this.ready || this.rolling) {
       return;
     }
@@ -315,18 +344,22 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       const value = keptValue(values, mode);
       const before = todayRoll(this.stats);
       const previousBest = this.stats.streak.best;
+      const {held, earned} = this.stats.inspiration;
       try {
-        this.stats = nudge ? this.statsService.nudge(value, sides, mode) : this.statsService.record(value, sides, mode);
+        this.stats = reroll ? this.statsService.reroll(value, sides, mode) : this.statsService.record(value, sides, mode);
       } catch {
-        // Another tab used this week's nudge (or rolled over midnight) while the dice were in the air.
+        // Another tab spent the last ✦ (or rolled over midnight) while the dice were in the air.
         this.stats = this.statsService.load();
         this.refreshDerived();
-        this.showToast('That nudge was already used this week.');
+        this.showToast('No Inspiration left to spend.');
         return;
       }
       this.sessionRolls++;
+      const isDayRoll = reroll || !before;
+      const reasons = isDayRoll ? inspirationReasons(value, sides, this.stats.streak.current, !reroll) : [];
+      const kept = this.stats.inspiration.held - (held - (reroll ? 1 : 0));
       const badges = newBadges(this.stats, {
-        values, value, sides, mode, isDayRoll: nudge || !before, date: localDateKey(new Date()),
+        values, value, sides, mode, isDayRoll, rerolledFrom: reroll && before ? before.value : null, date: localDateKey(new Date()),
       });
       if (badges.length) {
         this.stats = this.statsService.award(badges.map(b => b.id));
@@ -340,11 +373,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         dropped: values.length > 1 ? values.find((v, i) => i !== values.indexOf(value)) ?? null : null,
         mode,
         verdict,
-        isToday: nudge || !before,
-        nudgedFrom: nudge && before ? {value: before.value, sides: before.sides} : null,
+        isToday: isDayRoll,
+        rerolledFrom: reroll && before ? {value: before.value, sides: before.sides} : null,
         streak: this.streak,
-        newBest: !nudge && !before && this.streak > 1 && this.streak > previousBest,
+        newBest: !reroll && !before && this.streak > 1 && this.streak > previousBest,
         badges,
+        inspiration: reasons.length ? {reasons, kept, first: earned === 0 && kept > 0} : null,
       };
       this.announcement = announce(this.result, this.resultLabel(this.result, ', '));
       this.refreshCrack();
@@ -371,7 +405,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   resultLabel(result: RollResult, separator = ' · '): string {
     return [
       result.isToday ? 'Today\'s roll' : 'Re-roll',
-      result.nudgedFrom ? 'nudged' : '',
+      result.rerolledFrom ? 'rerolled' : '',
       result.sides === 20 ? '' : `d${result.sides}`,
       result.mode === 'normal' ? '' : result.mode,
     ].filter(Boolean).join(separator);
@@ -471,6 +505,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     setTimeout(() => document.getElementById('day-' + this.calendarDay)?.focus());
   }
 
+  /** "For a natural 20 and a 14-day streak" */
+  inspirationReason(gain: InspirationGain, sides: DieSides): string {
+    const text = {natural: `a natural ${sides}`, streak: `a ${this.streak}-day streak`};
+    return 'For ' + gain.reasons.map(r => text[r]).join(' and ');
+  }
+
   /** "Natural" or "On a roll and Collector" */
   badgeNames(badges: readonly Badge[]): string {
     const names = badges.map(b => b.name);
@@ -481,7 +521,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return this.stats.days.find(d => d.date === this.calendarDay) ?? null;
   }
 
-  /** What a screen reader hears for a day: "Thursday, October 1, rolled 13, nudged from 4". */
+  /** What a screen reader hears for a day: "Thursday, October 1, rolled 13, rerolled from 4". */
   calendarDayLabel(day: CalendarDay): string {
     const date = dateFromKey(day.date).toLocaleDateString('en-US', {weekday: 'long', month: 'long', day: 'numeric'});
     const r = day.roll;
@@ -490,7 +530,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       day.isToday ? 'today' : '',
       r ? `rolled ${r.value}${r.sides === 20 ? '' : ' on the d' + r.sides}` : day.isFuture ? '' : 'no roll',
       day.tier === 'crit-success' ? 'natural top face' : day.tier === 'crit-fail' ? 'natural 1' : '',
-      r?.nudgedFrom ? `nudged from ${r.nudgedFrom.value}` : '',
+      r?.rerolledFrom ? `rerolled from ${r.rerolledFrom.value}` : '',
     ].filter(Boolean).join(', ');
   }
 
@@ -577,8 +617,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.applyTable();
   }
 
-  setNudge(nudge: boolean): void {
-    this.prefs = {...this.prefs, nudge};
+  setRerolls(rerolls: boolean): void {
+    this.prefs = {...this.prefs, rerolls};
     this.prefsService.save(this.prefs);
   }
 
@@ -612,7 +652,6 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.today = todayRoll(this.stats);
     this.streak = activeStreak(this.stats);
     this.streakAtRisk = streakAtRisk(this.stats);
-    this.nudgeUsed = nudgeUsedThisWeek(this.stats);
     this.refreshStatsView();
     this.refreshCrack();
   }
@@ -662,7 +701,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   /** Runs after the result renders, so effects can start from the number. */
   private celebrate(celebration: Celebration): void {
     this.sound.landed(celebration);
-    if (this.result?.badges.length) {
+    if (this.result?.badges.length || this.result?.inspiration?.kept) {
       // After the fanfare or trombone, if there is one.
       this.sound.badgeUnlocked(celebration === 'big-burst' || celebration === 'crack' ? 1.8 : 0.3);
     }
@@ -709,10 +748,11 @@ function announce(r: RollResult, label: string): string {
   return [
     `${label}: ${r.value}.`,
     r.dropped === null ? '' : `Dropped ${r.dropped}.`,
-    r.nudgedFrom ? `Was ${r.nudgedFrom.value}.` : '',
+    r.rerolledFrom ? `Was ${r.rerolledFrom.value}.` : '',
     r.verdict.message,
     r.isToday && r.streak > 1 ? `${r.streak}-day streak${r.newBest ? ', a new best!' : '.'}` : '',
     badges.length ? `${badges.length === 1 ? 'Badge' : 'Badges'} unlocked: ${badges.join(', ')}.` : '',
+    r.inspiration ? (r.inspiration.kept ? `Plus ${r.inspiration.kept} Inspiration.` : 'Inspiration is full, so none was added.') : '',
   ].filter(Boolean).join(' ');
 }
 

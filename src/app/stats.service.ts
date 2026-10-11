@@ -34,8 +34,8 @@ export interface RollRecord {
   mode: RollMode;
   /** Epoch milliseconds. */
   at: number;
-  /** Set when the roll was a nudge that replaced the day's roll. */
-  nudge?: true;
+  /** Set when the roll was a reroll that replaced the day's roll. */
+  reroll?: true;
 }
 
 /** The first roll of a day: the one that counts as that day's motivation. */
@@ -45,8 +45,8 @@ export interface DayRoll {
   value: number;
   sides: DieSides;
   mode: RollMode;
-  /** The roll a nudge replaced. */
-  nudgedFrom?: { value: number; sides: DieSides };
+  /** The roll a reroll replaced. */
+  rerolledFrom?: { value: number; sides: DieSides };
 }
 
 /** counts[sides][face - 1] is how many times that face was the kept roll on that die. */
@@ -60,14 +60,26 @@ export interface Streak {
   lastDate: string | null;
 }
 
-export interface Nudges {
-  /** The week (see `weekKey`) of the last nudge; one is allowed per week. */
-  lastWeek: string | null;
+export interface Rerolls {
   used: number;
-  /** Nudges that landed higher, or lower, than the roll they replaced. */
+  /** Rerolls that landed higher, or lower, than the roll they replaced. */
   better: number;
   worse: number;
 }
+
+/** ✦ tokens: earned on good days, spent to reroll the day's roll. */
+export interface Inspiration {
+  /** 0 to INSPIRATION_CAP. Everyone starts with one. */
+  held: number;
+  /** All ✦ ever earned (not the starting one), so the first earn can explain itself. */
+  earned: number;
+}
+
+/** Why a roll earned ✦: a natural top face as the day's roll, or every STREAK_STEP-th day of a streak. */
+export type InspirationReason = 'natural' | 'streak';
+
+export const INSPIRATION_CAP = 3;
+export const STREAK_STEP = 7;
 
 export interface Stats {
   version: 2;
@@ -82,7 +94,8 @@ export interface Stats {
   /** Each day's first roll, newest first. */
   days: DayRoll[];
   streak: Streak;
-  nudges: Nudges;
+  rerolls: Rerolls;
+  inspiration: Inspiration;
   /** Badge id → the local date it was earned. */
   achievements: Record<string, string>;
 }
@@ -112,7 +125,8 @@ export function emptyStats(): Stats {
     history: [],
     days: [],
     streak: {current: 0, best: 0, lastDate: null},
-    nudges: {lastWeek: null, used: 0, better: 0, worse: 0},
+    rerolls: {used: 0, better: 0, worse: 0},
+    inspiration: {held: 1, earned: 0},
     achievements: {},
   };
 }
@@ -135,13 +149,25 @@ export function addDays(dateKey: string, days: number): string {
   return localDateKey(date);
 }
 
-/** Weeks start on Sunday: this is the date of the Sunday on or before `now`. */
-export function weekKey(now: Date): string {
-  return localDateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()));
+/**
+ * What a day's roll earns. A first roll can earn for both; a reroll only for a natural top face,
+ * since it doesn't move the streak.
+ */
+export function inspirationReasons(value: number, sides: DieSides, streak: number, firstRollOfDay: boolean): InspirationReason[] {
+  const reasons: InspirationReason[] = [];
+  if (value === sides) {
+    reasons.push('natural');
+  }
+  if (firstRollOfDay && streak > 0 && streak % STREAK_STEP === 0) {
+    reasons.push('streak');
+  }
+  return reasons;
 }
 
-export function nudgeUsedThisWeek(stats: Stats, now: Date = new Date()): boolean {
-  return stats.nudges.lastWeek === weekKey(now);
+/** Adds earned ✦ up to the cap; any over the cap are lost. */
+function earn(inspiration: Inspiration, count: number): Inspiration {
+  const held = Math.min(INSPIRATION_CAP, inspiration.held + count);
+  return {held, earned: inspiration.earned + (held - inspiration.held)};
 }
 
 /** Where a roll sits between 0 (a 1) and 1 (the top face), so rolls on different dice compare. */
@@ -239,8 +265,8 @@ function sanitizeRecord(raw: unknown): RollRecord | null {
     return null;
   }
   const record: RollRecord = {value: r.value, sides: r.sides, mode: r.mode, at: r['at']};
-  if (r['nudge'] === true) {
-    record.nudge = true;
+  if (r['reroll'] === true) {
+    record.reroll = true;
   }
   return record;
 }
@@ -251,23 +277,27 @@ function sanitizeDay(raw: unknown): DayRoll | null {
     return null;
   }
   const day: DayRoll = {date: r['date'], value: r.value, sides: r.sides, mode: r.mode};
-  const from = r['nudgedFrom'] as Partial<DayRoll> | undefined;
+  const from = r['rerolledFrom'] as Partial<DayRoll> | undefined;
   if (from && isDieSides(from.sides) && isFace(from.value, from.sides)) {
-    day.nudgedFrom = {value: from.value, sides: from.sides};
+    day.rerolledFrom = {value: from.value, sides: from.sides};
   }
   return day;
 }
 
-function sanitizeNudges(raw: unknown): Nudges {
-  const n = (raw && typeof raw === 'object' ? raw : {}) as Partial<Nudges>;
-  const count = (v: unknown) => isCount(v) ? Math.floor(v) : 0;
+const count = (v: unknown) => isCount(v) ? Math.floor(v) : 0;
+
+function sanitizeRerolls(raw: unknown): Rerolls {
+  const n = (raw && typeof raw === 'object' ? raw : {}) as Partial<Rerolls>;
   const used = count(n.used);
-  return {
-    lastWeek: isDateKey(n.lastWeek) ? n.lastWeek : null,
-    used,
-    better: Math.min(used, count(n.better)),
-    worse: Math.min(used, count(n.worse)),
-  };
+  return {used, better: Math.min(used, count(n.better)), worse: Math.min(used, count(n.worse))};
+}
+
+function sanitizeInspiration(raw: unknown): Inspiration {
+  const n = raw && typeof raw === 'object' ? raw as Partial<Inspiration> : null;
+  if (!n || !isCount(n.held)) {
+    return emptyStats().inspiration;
+  }
+  return {held: Math.min(INSPIRATION_CAP, Math.floor(n.held)), earned: count(n.earned)};
 }
 
 function sanitizeAchievements(raw: unknown): Record<string, string> {
@@ -303,7 +333,8 @@ export function sanitize(raw: unknown): Stats {
     const current = Math.floor(k.current);
     stats.streak = {current, best: Math.max(current, Math.floor(k.best)), lastDate: k.lastDate};
   }
-  stats.nudges = sanitizeNudges(r['nudges']);
+  stats.rerolls = sanitizeRerolls(r['rerolls']);
+  stats.inspiration = sanitizeInspiration(r['inspiration']);
   stats.achievements = sanitizeAchievements(r['achievements']);
   return stats;
 }
@@ -333,7 +364,8 @@ export class StatsService {
 
   /**
    * Re-reads storage before writing so rolls made in another tab are not overwritten.
-   * The first roll of each local day becomes that day's roll and extends the streak.
+   * The first roll of each local day becomes that day's roll, extends the streak,
+   * and may earn ✦ (see `inspirationReasons`).
    */
   record(value: number, sides: DieSides, mode: RollMode, now: Date = new Date()): Stats {
     if (!isDieSides(sides) || !isFace(value, sides)) {
@@ -344,7 +376,8 @@ export class StatsService {
     bump(stats.counts, sides, value);
     stats.history = [{value, sides, mode, at: now.getTime()}, ...stats.history].slice(0, HISTORY_LIMIT);
     const date = localDateKey(now);
-    if (!todayRoll(stats, now)) {
+    const firstRollOfDay = !todayRoll(stats, now);
+    if (firstRollOfDay) {
       stats.days = [{date, value, sides, mode}, ...stats.days].slice(0, DAYS_LIMIT);
       bump(stats.dailyCounts, sides, value);
     }
@@ -354,41 +387,45 @@ export class StatsService {
       streak.best = Math.max(streak.best, streak.current);
       streak.lastDate = date;
     }
+    if (firstRollOfDay) {
+      stats.inspiration = earn(stats.inspiration, inspirationReasons(value, sides, streak.current, true).length);
+    }
     this.save(stats);
     return stats;
   }
 
   /**
-   * Replaces today's roll with a new one, once a week. The nudge counts as a roll
-   * like any other; the daily stats swap the old roll for the new one.
+   * Spends one ✦ to replace today's roll with a new one. The reroll counts as a roll like any
+   * other; the daily stats swap the old roll for the new one. A natural top face earns a ✦ back.
    */
-  nudge(value: number, sides: DieSides, mode: RollMode, now: Date = new Date()): Stats {
+  reroll(value: number, sides: DieSides, mode: RollMode, now: Date = new Date()): Stats {
     if (!isDieSides(sides) || !isFace(value, sides)) {
       throw new Error(`Not a d${sides} value: ${value}`);
     }
     const stats = this.load();
     const today = todayRoll(stats, now);
-    if (!today || nudgeUsedThisWeek(stats, now)) {
-      throw new Error('No nudge available');
+    if (!today || stats.inspiration.held < 1) {
+      throw new Error('No Inspiration to spend');
     }
     stats.lifetimeRolls++;
     bump(stats.counts, sides, value);
-    stats.history = [{value, sides, mode, at: now.getTime(), nudge: true as const}, ...stats.history].slice(0, HISTORY_LIMIT);
+    stats.history = [{value, sides, mode, at: now.getTime(), reroll: true as const}, ...stats.history].slice(0, HISTORY_LIMIT);
 
     bump(stats.dailyCounts, today.sides, today.value, -1);
     bump(stats.dailyCounts, sides, value);
     stats.days[stats.days.indexOf(today)] = {
-      date: today.date, value, sides, mode, nudgedFrom: {value: today.value, sides: today.sides},
+      date: today.date, value, sides, mode, rerolledFrom: {value: today.value, sides: today.sides},
     };
 
     const change = rollScore(value, sides) - rollScore(today.value, today.sides);
-    const {nudges} = stats;
-    stats.nudges = {
-      lastWeek: weekKey(now),
-      used: nudges.used + 1,
-      better: nudges.better + (change > 0 ? 1 : 0),
-      worse: nudges.worse + (change < 0 ? 1 : 0),
+    const {rerolls} = stats;
+    stats.rerolls = {
+      used: rerolls.used + 1,
+      better: rerolls.better + (change > 0 ? 1 : 0),
+      worse: rerolls.worse + (change < 0 ? 1 : 0),
     };
+    const spent = {...stats.inspiration, held: stats.inspiration.held - 1};
+    stats.inspiration = earn(spent, inspirationReasons(value, sides, stats.streak.current, false).length);
     this.save(stats);
     return stats;
   }

@@ -5,15 +5,15 @@ import {
   DAYS_LIMIT,
   dieSummaries,
   HISTORY_LIMIT,
+  INSPIRATION_CAP,
+  inspirationReasons,
   KeyValueStorage,
   localDateKey,
-  nudgeUsedThisWeek,
   sanitize,
   STATS_KEY,
   StatsService,
   streakAtRisk,
   todayRoll,
-  weekKey,
 } from './stats.service';
 
 class MemoryStorage implements KeyValueStorage {
@@ -165,46 +165,68 @@ describe('StatsService', () => {
     expect(dieSummaries(sanitize(null).counts)).toEqual([]);
   });
 
-  describe('nudges', () => {
-    // 2026-10-10 is a Saturday; the 11th is the next Sunday.
-    it('starts each week on Sunday', () => {
-      expect(weekKey(day(10))).toBe('2026-10-04');
-      expect(weekKey(day(11))).toBe('2026-10-11');
-      expect(weekKey(day(17, 23))).toBe('2026-10-11');
+  describe('Inspiration and rerolls', () => {
+    it('starts everyone with one ✦', () => {
+      expect(service.load().inspiration).toEqual({held: 1, earned: 0});
     });
 
-    it('replaces today\'s roll and keeps what it replaced', () => {
+    it('spends a ✦ to replace today\'s roll and keeps what it replaced', () => {
       service.record(4, 20, 'normal', morning);
-      const stats = service.nudge(15, 20, 'normal', evening);
+      const stats = service.reroll(15, 20, 'normal', evening);
 
       expect(todayRoll(stats, evening)).toEqual({
-        date: '2026-10-10', value: 15, sides: 20, mode: 'normal', nudgedFrom: {value: 4, sides: 20},
+        date: '2026-10-10', value: 15, sides: 20, mode: 'normal', rerolledFrom: {value: 4, sides: 20},
       });
       expect(stats.dailyCounts[20]![3]).toBe(0);
       expect(stats.dailyCounts[20]![14]).toBe(1);
       // It's still a roll, so it counts towards every-roll stats.
       expect(stats.lifetimeRolls).toBe(2);
-      expect(stats.history[0]).toMatchObject({value: 15, nudge: true});
-      expect(stats.nudges).toEqual({lastWeek: '2026-10-04', used: 1, better: 1, worse: 0});
+      expect(stats.history[0]).toMatchObject({value: 15, reroll: true});
+      expect(stats.rerolls).toEqual({used: 1, better: 1, worse: 0});
+      expect(stats.inspiration.held).toBe(0);
     });
 
-    it('allows one a week, back on Sunday', () => {
+    it('needs a ✦ and a roll today to reroll', () => {
       service.record(4, 20, 'normal', day(9));
-      service.nudge(2, 20, 'normal', day(9));
-      expect(nudgeUsedThisWeek(service.load(), day(10))).toBe(true);
+      expect(() => service.reroll(9, 20, 'normal', day(10))).toThrowError();
       service.record(6, 20, 'normal', day(10));
-      expect(() => service.nudge(9, 20, 'normal', day(10))).toThrowError();
-
-      service.record(6, 20, 'normal', day(11));
-      expect(nudgeUsedThisWeek(service.load(), day(11))).toBe(false);
-      const stats = service.nudge(3, 4, 'normal', day(11));
+      service.reroll(3, 4, 'normal', day(10));
+      expect(() => service.reroll(9, 20, 'normal', day(10))).toThrowError();
       // A 3 on a d4 beats a 6 on a d20.
-      expect(stats.nudges).toEqual({lastWeek: '2026-10-11', used: 2, better: 1, worse: 1});
+      expect(service.load().rerolls).toEqual({used: 1, better: 1, worse: 0});
     });
 
-    it('needs a roll today to nudge', () => {
-      service.record(4, 20, 'normal', day(9));
-      expect(() => service.nudge(9, 20, 'normal', day(10))).toThrowError();
+    it('earns a ✦ for a natural top face as the day\'s roll, not a practice roll', () => {
+      service.record(20, 20, 'normal', morning);
+      expect(service.load().inspiration).toEqual({held: 2, earned: 1});
+      service.record(20, 20, 'normal', evening);
+      expect(service.load().inspiration.held).toBe(2);
+    });
+
+    it('earns a ✦ back when a reroll lands the top face', () => {
+      service.record(2, 20, 'normal', morning);
+      expect(service.reroll(20, 20, 'normal', evening).inspiration).toEqual({held: 1, earned: 1});
+    });
+
+    it('earns a ✦ on every 7th day of a streak', () => {
+      for (let d = 1; d <= 14; d++) {
+        service.record(10, 20, 'normal', day(d));
+      }
+      expect(service.load().inspiration).toEqual({held: 3, earned: 2});
+    });
+
+    it('holds at most three', () => {
+      for (let d = 1; d <= 5; d++) {
+        service.record(20, 20, 'normal', day(d));
+      }
+      expect(service.load().inspiration).toEqual({held: INSPIRATION_CAP, earned: 2});
+    });
+
+    it('names why a roll earned ✦', () => {
+      expect(inspirationReasons(20, 20, 14, true)).toEqual(['natural', 'streak']);
+      expect(inspirationReasons(20, 20, 14, false)).toEqual(['natural']);
+      expect(inspirationReasons(6, 6, 3, true)).toEqual(['natural']);
+      expect(inspirationReasons(12, 20, 6, true)).toEqual([]);
     });
   });
 

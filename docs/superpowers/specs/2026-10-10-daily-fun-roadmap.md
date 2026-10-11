@@ -118,12 +118,11 @@ Chunk 2 comes early because Halloween (October) is three weeks away.
 - **Built names:** First roll 🎲, Natural 🌟, Rock bottom 💀, Snake eyes 🐍, Double crit ✨, Collector 🧰, On a roll 🔥 (7), Habit 📅 (30), Centurion 💯 (100), Comeback 🔄, Regular 🎯, Devoted 🏆. Several unlocking at once share one pill ("3 badges unlocked"); the tick waits for a crit's fanfare.
 - Later chunks add their own badges.
 
-### 6. Inspiration (merged with the nudge)
+### 6. Inspiration (replaces the nudge)
 
-The two become one mechanic: **Reroll** replaces today's roll, and it has two sources of charges:
+Decided at review: the free weekly nudge is gone. **Reroll** replaces today's roll and always costs one ✦. Everyone starts with one ✦ (a tutorial that awards it could come later).
 
-1. **The free weekly nudge**, unchanged (one per ISO week).
-2. **Inspiration tokens (✦)**:
+- **Inspiration tokens (✦)**:
    - Earned: one for a natural 20 on the day's roll, one for every 7th day of streak (7, 14, 21…).
    - Cap: 3. At the cap the counter reads "full", so the player knows to spend one.
 

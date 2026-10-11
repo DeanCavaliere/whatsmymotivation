@@ -1,5 +1,5 @@
 import {DIE_SIDES, DieSides, RollMode} from './motivation';
-import {addDays, Stats} from './stats.service';
+import {addDays, INSPIRATION_CAP, Stats} from './stats.service';
 
 /** The roll that was just recorded, with both dice when rolling with advantage or disadvantage. */
 export interface RollContext {
@@ -9,8 +9,10 @@ export interface RollContext {
   value: number;
   sides: DieSides;
   mode: RollMode;
-  /** Whether this became the day's roll (a first roll or a nudge). */
+  /** Whether this became the day's roll (a first roll or a reroll). */
   isDayRoll: boolean;
+  /** The day's roll this one replaced, when it was a reroll. */
+  rerolledFrom: number | null;
   /** Local date, YYYY-MM-DD. */
   date: string;
 }
@@ -103,6 +105,23 @@ export const BADGES: readonly Badge[] = [
   },
   rollCountBadge('rolls-100', '🎯', 'Regular', 100),
   rollCountBadge('rolls-1000', '🏆', 'Devoted', 1000),
+  {
+    id: 'hoarder', icon: '💰', name: 'Hoarder',
+    description: `Hold ${INSPIRATION_CAP} ✦ Inspiration at once.`,
+    earned: stats => stats.inspiration.held >= INSPIRATION_CAP,
+    progress: stats => ({current: stats.inspiration.held, goal: INSPIRATION_CAP, unit: '✦'}),
+  },
+  {
+    id: 'big-spender', icon: '💸', name: 'Big spender',
+    description: 'Spend 5 ✦ Inspiration on rerolls.',
+    earned: stats => stats.rerolls.used >= 5,
+    progress: stats => ({current: Math.min(stats.rerolls.used, 5), goal: 5, unit: '✦'}),
+  },
+  {
+    id: 'lucky-reroll', icon: '🍀', name: 'Lucky reroll',
+    description: 'Reroll a natural 1 into the top face.',
+    earned: (_, roll) => roll.rerolledFrom === 1 && roll.value === roll.sides,
+  },
 ];
 
 /** Badges this roll earns that weren't earned before. */
