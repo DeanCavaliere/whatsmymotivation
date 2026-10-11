@@ -61,7 +61,8 @@ Chunk 2 comes early because Halloween (October) is three weeks away.
 - **Setting:** "Seasonal themes", on by default.
 - **What changes during a season:** the felt, dice color and chalk color are overridden, and themed verdict messages are mixed in.
 - **What doesn't change:** the user's accent color always stays. Their own table and dice choices return when the season ends.
-- **Settings during a season:** a note says which season is active and that it can be turned off.
+- **Settings during a season:** the season appears as the chosen swatch in the Table and Dice pickers, with a note saying it runs until its end date. Picking any other table or dice turns the season off until it ends (stored as `seasonOff: "spooky-2026"`); picking the season swatch brings it back. The "Seasonal themes" switch turns all seasons off.
+- **Look (built):** Spooky #251433 felt, pumpkin chalk and dice; Festive #4e0f17, snow chalk, pine dice; Valentine's #4f1530, pink chalk, rose dice; Lucky #07452a, gold chalk and dice. Each has four chalk doodles, one per corner, each turned and nudged a little. Themed messages show on half of rolls.
 
 | Season | Dates (local, inclusive) |
 |---|---|

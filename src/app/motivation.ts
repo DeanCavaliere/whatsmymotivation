@@ -96,11 +96,16 @@ export function celebrationFor(tier: Tier): Celebration {
   }
 }
 
-/** `random` is injectable so the message choice is deterministic in tests. */
-export function verdictFor(value: number, sides: DieSides = 20, random: () => number = Math.random): Verdict {
+/**
+ * `random` is injectable so the message choice is deterministic in tests. During a season, `themed`
+ * holds its lines, and each roll has an even chance of one of those instead of a regular message.
+ */
+export function verdictFor(value: number, sides: DieSides = 20, random: () => number = Math.random,
+                           themed: Record<Tier, string> | null = null): Verdict {
   const tier = tierFor(value, sides);
   const options = MESSAGES[tier];
-  const message = options[Math.min(options.length - 1, Math.floor(random() * options.length))].replace('{max}', String(sides));
+  const line = themed && random() < 0.5 ? themed[tier] : options[Math.min(options.length - 1, Math.floor(random() * options.length))];
+  const message = line.replace('{max}', String(sides));
   return { tier, message, celebration: celebrationFor(tier) };
 }
 

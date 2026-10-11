@@ -14,26 +14,28 @@ describe('PrefsService', () => {
     };
   });
 
-  it('defaults to the classic table and a gold d20', () => {
+  it('defaults to the classic table, a gold d20 and seasonal themes on', () => {
     expect(new PrefsService(storage).load()).toEqual(DEFAULT_PREFS);
   });
 
   it('saves and reloads choices', () => {
-    new PrefsService(storage).save({table: 'royal', accent: 'jade', dice: 'ruby', sides: 6, nudge: false});
-    expect(new PrefsService(storage).load()).toEqual({table: 'royal', accent: 'jade', dice: 'ruby', sides: 6, nudge: false});
+    const saved = {table: 'royal', accent: 'jade', dice: 'ruby', sides: 6 as const, nudge: false, seasonal: false, seasonOff: 'spooky-2026'};
+    new PrefsService(storage).save(saved);
+    expect(new PrefsService(storage).load()).toEqual(saved);
   });
 
   it('ignores unknown or corrupt values', () => {
-    store.set(PREFS_KEY, JSON.stringify({table: 'lava', accent: 'neon', dice: 'ruby', sides: 7, nudge: 'yes'}));
-    expect(new PrefsService(storage).load()).toEqual({table: 'classic', accent: 'copper', dice: 'ruby', sides: 20, nudge: true});
+    store.set(PREFS_KEY, JSON.stringify({table: 'lava', accent: 'neon', dice: 'ruby', sides: 7, nudge: 'yes', seasonal: 1, seasonOff: 3}));
+    expect(new PrefsService(storage).load()).toEqual({...DEFAULT_PREFS, dice: 'ruby'});
     store.set(PREFS_KEY, '{oops');
     expect(new PrefsService(storage).load()).toEqual(DEFAULT_PREFS);
   });
 
   it('keeps choices for the session without storage', () => {
     const prefs = new PrefsService(null);
-    prefs.save({table: 'plum', accent: 'rose', dice: 'ivory', sides: 4, nudge: true});
-    expect(prefs.load()).toEqual({table: 'plum', accent: 'rose', dice: 'ivory', sides: 4, nudge: true});
+    const saved = {...DEFAULT_PREFS, table: 'plum', accent: 'rose', dice: 'ivory', sides: 4 as const};
+    prefs.save(saved);
+    expect(prefs.load()).toEqual(saved);
   });
 
   it('falls back to the first theme for unknown ids', () => {

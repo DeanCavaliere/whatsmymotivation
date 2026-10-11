@@ -155,8 +155,46 @@
   transition: opacity 300ms ease;
 }
 
-.table-text.is-dimmed {
+.table-text.is-dimmed,
+.doodles.is-dimmed {
   opacity: 0.35;
+}
+
+/* ---------- Seasonal chalk doodles, one per corner ---------- */
+
+.doodles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 300ms ease;
+}
+
+.doodle {
+  position: absolute;
+  width: calc(var(--size) * clamp(56px, 22cqmin, 150px));
+  aspect-ratio: 1;
+  overflow: visible;
+  fill: none;
+  stroke: var(--chalk);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.75;
+}
+
+.doodle .is-filled {
+  fill: var(--chalk);
+  stroke: none;
+}
+
+/* Positive nudges move a doodle toward the middle of the table. */
+.doodle[data-corner="top-left"] { top: 3%; left: 3%; translate: var(--dx) var(--dy); }
+.doodle[data-corner="top-right"] { top: 3%; right: 3%; translate: calc(-1 * var(--dx)) var(--dy); }
+.doodle[data-corner="bottom-left"] { bottom: 3%; left: 3%; translate: var(--dx) calc(-1 * var(--dy)); }
+.doodle[data-corner="bottom-right"] { bottom: 3%; right: 3%; translate: calc(-1 * var(--dx)) calc(-1 * var(--dy)); }
+
+.doodle {
+  rotate: var(--rotate);
 }
 
 /* ---------- Natural 1: the table jolts, drains of color, and cracks ---------- */

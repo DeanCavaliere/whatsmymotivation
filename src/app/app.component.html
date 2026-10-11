@@ -46,6 +46,19 @@
   </header>
 
   <main #table class="table" [class.is-nudged]="tableNudged" [class.is-jolted]="tableJolted" [class.is-drained]="tableDrained">
+    @if (season; as s) {
+      <div class="doodles" [class.is-dimmed]="result" aria-hidden="true">
+        @for (d of s.doodles; track $index) {
+          <svg class="doodle" [attr.data-corner]="d.corner" viewBox="-60 -60 120 120"
+            [style.--size]="d.size" [style.--rotate.deg]="d.rotate" [style.--dx.%]="d.dx" [style.--dy.%]="d.dy">
+            @for (p of d.paths; track $index) {
+              <path [attr.d]="p.d" [class.is-filled]="p.fill"/>
+            }
+          </svg>
+        }
+      </div>
+    }
+
     <svg class="table-text" [class.is-dimmed]="result" viewBox="0 0 1000 1000" aria-hidden="true">
       <defs>
         <path id="arc-top" d="M 190 500 A 310 310 0 0 1 810 500"/>
@@ -362,21 +375,37 @@
           <span class="accordion-title">Dice color</span>
           <span class="accordion-value">
             <span class="visually-hidden">, currently </span>
-            <span class="swatch-chip swatch-die" [style.--chip]="diceColorOf(prefs.dice).color" aria-hidden="true"></span>
-            {{ diceColorOf(prefs.dice).label }}
+            <span class="swatch-chip swatch-die" [style.--chip]="diceTint" aria-hidden="true"></span>
+            {{ season ? season.diceLabel : diceColorOf(prefs.dice).label }}
           </span>
         </summary>
         <div class="accordion-body">
           <fieldset class="swatches">
             <legend class="visually-hidden">Dice color</legend>
+            @if (seasonAvailable; as s) {
+              <label class="swatch">
+                <input type="radio" name="dice" [value]="s.id" [checked]="!!season" (change)="useSeason()">
+                <span class="swatch-chip swatch-die" [style.--chip]="s.dice" aria-hidden="true"></span>
+                {{ s.diceLabel }}
+              </label>
+            }
             @for (d of diceColors; track d.id) {
               <label class="swatch">
-                <input type="radio" name="dice" [value]="d.id" [checked]="prefs.dice === d.id" (change)="setDice(d.id)">
+                <input type="radio" name="dice" [value]="d.id" [checked]="!season && prefs.dice === d.id" (change)="setDice(d.id)">
                 <span class="swatch-chip swatch-die" [style.--chip]="d.color" aria-hidden="true"></span>
                 {{ d.label }}
               </label>
             }
           </fieldset>
+          @if (seasonAvailable; as s) {
+            <p class="season-note">
+              @if (season) {
+                <span aria-hidden="true">{{ s.emoji }}</span> {{ s.label }} season is on until {{ seasonEnd(s) }}. Pick any dice color to turn it off until next season.
+              } @else {
+                {{ s.label }} season is off until next season. Pick {{ s.diceLabel }} to bring it back.
+              }
+            </p>
+          }
           <p class="panel-note">The new color shows up on your next roll.</p>
         </div>
       </details>
@@ -386,21 +415,37 @@
           <span class="accordion-title">Table color</span>
           <span class="accordion-value">
             <span class="visually-hidden">, currently </span>
-            <span class="swatch-chip swatch-felt" [style.--chip]="tableThemeOf(prefs.table).felt" aria-hidden="true"></span>
-            {{ tableThemeOf(prefs.table).label }}
+            <span class="swatch-chip swatch-felt" [style.--chip]="season ? season.felt : tableThemeOf(prefs.table).felt" aria-hidden="true"></span>
+            {{ season ? season.label : tableThemeOf(prefs.table).label }}
           </span>
         </summary>
         <div class="accordion-body">
           <fieldset class="swatches">
             <legend class="visually-hidden">Table color</legend>
+            @if (seasonAvailable; as s) {
+              <label class="swatch">
+                <input type="radio" name="table" [value]="s.id" [checked]="!!season" (change)="useSeason()">
+                <span class="swatch-chip swatch-felt" [style.--chip]="s.felt" aria-hidden="true"></span>
+                {{ s.label }}
+              </label>
+            }
             @for (t of tableThemes; track t.id) {
               <label class="swatch">
-                <input type="radio" name="table" [value]="t.id" [checked]="prefs.table === t.id" (change)="setTable(t.id)">
+                <input type="radio" name="table" [value]="t.id" [checked]="!season && prefs.table === t.id" (change)="setTable(t.id)">
                 <span class="swatch-chip swatch-felt" [style.--chip]="t.felt" aria-hidden="true"></span>
                 {{ t.label }}
               </label>
             }
           </fieldset>
+          @if (seasonAvailable; as s) {
+            <p class="season-note">
+              @if (season) {
+                <span aria-hidden="true">{{ s.emoji }}</span> {{ s.label }} season is on until {{ seasonEnd(s) }}. Pick any table to turn it off until next season.
+              } @else {
+                {{ s.label }} season is off until next season. Pick {{ s.label }} to bring it back.
+              }
+            </p>
+          }
         </div>
       </details>
 
@@ -413,6 +458,17 @@
         <input #nudgeSwitch id="nudge-switch" class="switch" type="checkbox" role="switch" [checked]="prefs.nudge"
           aria-labelledby="nudge-label" aria-describedby="nudge-description"
           (change)="setNudge(nudgeSwitch.checked)">
+      </label>
+
+      <label class="switch-row" for="seasonal-switch">
+        <span class="switch-text">
+          <strong id="seasonal-label">Seasonal themes</strong>
+          <small id="seasonal-description">Holiday tables, dice and messages: Spooky in October, Festive in December, Valentine's Feb 10–14 and Lucky Mar 15–17.</small>
+        </span>
+        <span class="switch-state" aria-hidden="true">{{ prefs.seasonal ? 'On' : 'Off' }}</span>
+        <input #seasonalSwitch id="seasonal-switch" class="switch" type="checkbox" role="switch" [checked]="prefs.seasonal"
+          aria-labelledby="seasonal-label" aria-describedby="seasonal-description"
+          (change)="setSeasonal(seasonalSwitch.checked)">
       </label>
     </div>
 

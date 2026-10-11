@@ -42,6 +42,12 @@ describe('motivation', () => {
     expect(verdictFor(1, 20, () => 1).message).toBe(MESSAGES['crit-fail'][2]);
   });
 
+  it('mixes in a season\'s themed lines half the time', () => {
+    const themed = {...MESSAGES, 'mid': 'A perfectly average haunting.'} as unknown as Record<Tier, string>;
+    expect(verdictFor(10, 20, () => 0.4, themed).message).toBe('A perfectly average haunting.');
+    expect(verdictFor(10, 20, () => 0.6, themed).message).toBe(MESSAGES.mid[1]);
+  });
+
   it('names the die in crit messages', () => {
     expect(verdictFor(20, 20, () => 0.5).message).toBe('Natural 20! Today is legendary.');
     expect(verdictFor(6, 6, () => 0.5).message).toBe('Natural 6! Today is legendary.');

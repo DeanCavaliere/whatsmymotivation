@@ -206,6 +206,17 @@
   color: var(--ink);
 }
 
+/* Which season is dressing the table, and how to turn it off. */
+.season-note {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 10px;
+  background: var(--accent-fill);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
 /* ---------- Settings ---------- */
 
 .swatches {

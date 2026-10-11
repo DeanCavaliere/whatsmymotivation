@@ -239,6 +239,63 @@ describe('AppComponent', () => {
     });
   });
 
+  describe('during Spooky season', () => {
+    const felt = () => document.documentElement.style.getPropertyValue('--felt');
+
+    beforeEach(async () => {
+      vi.setSystemTime(new Date(2026, 9, 10, 9));
+      await setup();
+    });
+
+    afterEach(() => vi.useRealTimers());
+
+    it('dresses the table, dice and corners for the season', async () => {
+      fixture.detectChanges();
+      expect(app.season?.id).toBe('spooky');
+      expect(felt()).toBe('#251433');
+      expect(fixture.nativeElement.querySelectorAll('.doodle').length).toBe(4);
+      await app.roll();
+      expect(dice.lastColor).toBe('#e8731c');
+    });
+
+    it('turns the season off until it ends when you pick your own table', () => {
+      app.setTable('royal');
+      expect(app.season).toBeNull();
+      expect(app.prefs.seasonOff).toBe('spooky-2026');
+      expect(felt()).toBe('#143a66');
+      app.useSeason();
+      expect(app.season?.id).toBe('spooky');
+    });
+
+    it('turns the season off when you pick your own dice', () => {
+      app.setDice('ruby');
+      expect(app.season).toBeNull();
+      expect(app.diceTint).toBe('#b3262d');
+    });
+
+    it('can be switched off entirely', () => {
+      app.setSeasonal(false);
+      fixture.detectChanges();
+      expect(app.season).toBeNull();
+      expect(app.seasonAvailable).toBeNull();
+      expect(fixture.nativeElement.querySelector('.doodles')).toBeNull();
+    });
+  });
+
+  describe('outside a season', () => {
+    beforeEach(async () => {
+      vi.setSystemTime(new Date(2026, 10, 5, 9));
+      await setup();
+    });
+
+    afterEach(() => vi.useRealTimers());
+
+    it('uses your own table', () => {
+      expect(app.season).toBeNull();
+      expect(document.documentElement.style.getPropertyValue('--felt')).toBe('#10422f');
+    });
+  });
+
   describe('with a streak from yesterday', () => {
     beforeEach(async () => {
       const yesterday = addDays(localDateKey(new Date()), -1);

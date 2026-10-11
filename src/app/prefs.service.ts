@@ -76,9 +76,15 @@ export interface Prefs {
   sides: DieSides;
   /** Show the once-a-week "Nudge the table" re-roll. */
   nudge: boolean;
+  /** Switch to the seasonal table, dice and messages on their dates. */
+  seasonal: boolean;
+  /** A season the player turned off by picking their own table or dice (see `seasonKey`). */
+  seasonOff: string | null;
 }
 
-export const DEFAULT_PREFS: Prefs = {table: 'classic', accent: 'copper', dice: 'gold', sides: 20, nudge: true};
+export const DEFAULT_PREFS: Prefs = {
+  table: 'classic', accent: 'copper', dice: 'gold', sides: 20, nudge: true, seasonal: true, seasonOff: null,
+};
 
 export function tableTheme(id: string): TableTheme {
   return TABLE_THEMES.find(t => t.id === id) ?? TABLE_THEMES[0];
@@ -116,6 +122,8 @@ export class PrefsService {
         dice: DICE_COLORS.some(d => d.id === dice) ? dice as string : DEFAULT_PREFS.dice,
         sides: isDieSides(sides) ? sides : DEFAULT_PREFS.sides,
         nudge: typeof raw?.['nudge'] === 'boolean' ? raw['nudge'] as boolean : DEFAULT_PREFS.nudge,
+        seasonal: typeof raw?.['seasonal'] === 'boolean' ? raw['seasonal'] as boolean : DEFAULT_PREFS.seasonal,
+        seasonOff: typeof raw?.['seasonOff'] === 'string' ? raw['seasonOff'] as string : null,
       };
     } catch {
       return {...DEFAULT_PREFS};

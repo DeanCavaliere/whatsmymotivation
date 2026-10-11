@@ -1,9 +1,10 @@
-import {AfterViewInit, Component, ElementRef, HostListener, NgZone, OnDestroy, Optional, ViewChild, ChangeDetectionStrategy} from '@angular/core';
+import {AfterViewInit, Component, ElementRef, HostListener, isDevMode, NgZone, OnDestroy, Optional, ViewChild, ChangeDetectionStrategy} from '@angular/core';
 import {DatePipe, DecimalPipe, PercentPipe} from '@angular/common';
 import {SwUpdate} from '@angular/service-worker';
 import {ConfettiComponent} from './components/confetti/confetti.component';
 import {ConfettiService} from './components/confetti/confetti.service';
 import {CrackPath, crackPaths} from './crack';
+import {activeSeason, Season, seasonKey, SEASONS} from './seasons';
 import {shareText} from './share';
 import {DiceService} from './dice.service';
 import {Celebration, DieSides, dieOdds, keptValue, RollMode, Tier, tierFor, Verdict, verdictFor} from './motivation';
@@ -152,6 +153,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   hoveredBar: ChartBar | null = null;
   confirmingReset = false;
   prefs: Prefs;
+  /** The season on today's date, when seasonal themes are on. */
+  seasonAvailable: Season | null = null;
+  /** The season dressing the table: available, and not turned off by picking another table or dice. */
+  season: Season | null = null;
   install: InstallOption = null;
   toast = '';
   /** What screen readers hear when the dice land. */
@@ -184,7 +189,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         sides: today.sides,
         dropped: null,
         mode: today.mode,
-        verdict: verdictFor(today.value, today.sides),
+        verdict: verdictFor(today.value, today.sides, Math.random, this.season?.messages),
         isToday: true,
         nudgedFrom: today.nudgedFrom ?? null,
         streak: this.streak,
@@ -244,6 +249,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
     this.stats = this.statsService.load();
     this.refreshDerived();
+    // A season may have started or ended overnight.
+    this.applyTable();
     if (this.result?.isToday && !this.today && !this.rolling) {
       this.result = null;
     }
@@ -279,7 +286,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const mode = this.mode;
     const sides = this.prefs.sides;
     try {
-      const values = await this.dice.roll(mode, sides, diceColor(this.prefs.dice).color);
+      const values = await this.dice.roll(mode, sides, this.diceTint);
       const value = keptValue(values, mode);
       const before = todayRoll(this.stats);
       const previousBest = this.stats.streak.best;
@@ -295,7 +302,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.sessionRolls++;
       this.refreshDerived();
 
-      const verdict = verdictFor(value, sides);
+      const verdict = verdictFor(value, sides, Math.random, this.season?.messages);
       this.result = {
         value,
         sides,
@@ -396,8 +403,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  /** Picking your own table or dice turns the current season off until it ends. */
   setTable(id: string): void {
-    this.prefs = {...this.prefs, table: id};
+    this.prefs = {...this.prefs, table: id, seasonOff: this.availableSeasonKey()};
     this.prefsService.save(this.prefs);
     this.applyTable();
   }
@@ -409,8 +417,35 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   setDice(id: string): void {
-    this.prefs = {...this.prefs, dice: id};
+    this.prefs = {...this.prefs, dice: id, seasonOff: this.availableSeasonKey()};
     this.prefsService.save(this.prefs);
+    this.applyTable();
+  }
+
+  /** Picking the season's swatch brings a season back after it was turned off. */
+  useSeason(): void {
+    this.prefs = {...this.prefs, seasonOff: null};
+    this.prefsService.save(this.prefs);
+    this.applyTable();
+  }
+
+  setSeasonal(seasonal: boolean): void {
+    this.prefs = {...this.prefs, seasonal, seasonOff: null};
+    this.prefsService.save(this.prefs);
+    this.applyTable();
+  }
+
+  get diceTint(): string {
+    return this.season?.dice ?? diceColor(this.prefs.dice).color;
+  }
+
+  /** "Oct 31" */
+  seasonEnd(season: Season): string {
+    return new Date(2000, season.end[0] - 1, season.end[1]).toLocaleDateString('en-US', {month: 'short', day: 'numeric'});
+  }
+
+  private availableSeasonKey(): string | null {
+    return this.seasonAvailable ? seasonKey(this.seasonAvailable, new Date()) : this.prefs.seasonOff;
   }
 
   setSides(sides: DieSides): void {
@@ -512,10 +547,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   private applyTable(): void {
+    const now = new Date();
+    this.seasonAvailable = this.prefs.seasonal ? previewSeason() ?? activeSeason(now) : null;
+    this.season = this.seasonAvailable && this.prefs.seasonOff !== seasonKey(this.seasonAvailable, now) ? this.seasonAvailable : null;
     const theme = tableTheme(this.prefs.table);
     const root = document.documentElement.style;
-    root.setProperty('--felt', theme.felt);
-    root.setProperty('--chalk', theme.chalk);
+    root.setProperty('--felt', this.season?.felt ?? theme.felt);
+    root.setProperty('--chalk', this.season?.chalk ?? theme.chalk);
     root.setProperty('--accent', accentColor(this.prefs.accent).color);
   }
 
@@ -556,6 +594,15 @@ function chartBars(faces: number[]): ChartBar[] {
       labeled: n <= 12 || face === 1 || face % 5 === 0,
     };
   });
+}
+
+/** Dev builds only: ?season=festive shows that season on any date. */
+function previewSeason(): Season | null {
+  if (!isDevMode()) {
+    return null;
+  }
+  const id = new URLSearchParams(location.search).get('season');
+  return SEASONS.find(s => s.id === id) ?? null;
 }
 
 function detectInstallOption(): InstallOption {

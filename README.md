@@ -16,6 +16,7 @@ Live at [whatsmymotivation.today](https://whatsmymotivation.today).
 - Share the day's roll with a seven-day emoji strip and the streak (Web Share API, or copy to clipboard)
 - Nudge the table: once a week, re-roll today's roll. It comes back every Sunday, and the daily stats track how often nudges helped or backfired. Can be switched off in Settings
 - Accent colors (Copper, Arcane, Ember, Jade, Rose), table themes and dice colors (Settings). The felt is one neutral texture tinted with CSS `background-blend-mode`, so a new table color is a one-line addition to `prefs.service.ts`
+- Seasonal tables (on by default): Spooky in October, Festive in December, Valentine's Feb 10–14 and Lucky Mar 15–17 each bring their own felt, chalk, dice color, corner doodles and messages. Picking your own table or dice turns the current season off until it ends. Seasons are data in `seasons.ts`
 - Rolls only happen from the Roll button, so a stray key press or tap can't replace the day's roll
 - A natural top face bursts confetti from the number; a natural 1 jolts the table, drains its color and leaves a crack that stays all day while that 1 is the day's roll
 - Accessible: text meets WCAG AA contrast on every table theme, chosen options are marked by more than color, results are announced to screen readers, the chart has a table equivalent, and it supports keyboard focus, forced colors and reduced motion
@@ -28,6 +29,7 @@ Requires Node 22 or 24 (see `.nvmrc`).
 npm install
 npm start          # dev server on http://localhost:4405
 npm test           # unit tests (Vitest + jsdom)
+# Dev server only: /?rolls=20,1 queues the next results, /?season=festive previews a season
 npm run build      # production build into dist/whatsmymotivation
 ```
 
