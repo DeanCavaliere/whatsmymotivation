@@ -3,6 +3,7 @@ import {DatePipe, DecimalPipe, PercentPipe} from '@angular/common';
 import {SwUpdate} from '@angular/service-worker';
 import {ConfettiComponent} from './components/confetti/confetti.component';
 import {ConfettiService} from './components/confetti/confetti.service';
+import {CalendarDay, CalendarMonth, calendarMonth, earliestMonth, shiftMonth} from './calendar';
 import {CrackPath, crackPaths} from './crack';
 import {activeSeason, Season, seasonKey, SEASONS} from './seasons';
 import {shareText} from './share';
@@ -22,6 +23,7 @@ import {
 } from './prefs.service';
 import {
   activeStreak,
+  addDays,
   CountTotals,
   countTotals,
   dateFromKey,
@@ -150,6 +152,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   /** The die picked in the stats dialog, when rolls span more than one. */
   chartSides: DieSides | null = null;
   statsView: StatsView = {dice: [], die: null, bars: []};
+  /** The month shown in Stats › Daily, and the day picked in it. */
+  calendar: CalendarMonth | null = null;
+  calendarDay = localDateKey(new Date());
+  readonly weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   hoveredBar: ChartBar | null = null;
   confirmingReset = false;
   prefs: Prefs;
@@ -368,6 +374,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   openStats(): void {
     this.confirmingReset = false;
     this.chartSides = null;
+    this.calendarDay = localDateKey(new Date());
+    this.calendar = null;
     this.refreshStatsView();
     this.statsDialogRef.nativeElement.showModal();
   }
@@ -385,6 +393,72 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     event.preventDefault();
     this.setStatsTab(this.statsTab === 'daily' ? 'all' : 'daily');
     document.getElementById(`tab-${this.statsTab}`)?.focus();
+  }
+
+  /** Pages the calendar, keeping the same day of the month where it exists and isn't in the future. */
+  shiftCalendar(by: number): void {
+    if (!this.calendar || !this.canShiftCalendar(by)) {
+      return;
+    }
+    const {year, month} = shiftMonth(this.calendar.year, this.calendar.month, by);
+    const day = Math.min(Number(this.calendarDay.slice(8)), new Date(year, month + 1, 0).getDate());
+    const date = localDateKey(new Date(year, month, day));
+    const today = localDateKey(new Date());
+    this.calendarDay = date > today ? today : date;
+    this.refreshStatsView();
+  }
+
+  canShiftCalendar(by: number): boolean {
+    if (!this.calendar) {
+      return false;
+    }
+    const target = shiftMonth(this.calendar.year, this.calendar.month, by);
+    const now = new Date();
+    const earliest = earliestMonth(this.stats.days, now);
+    const index = (m: { year: number, month: number }) => m.year * 12 + m.month;
+    return index(target) >= index(earliest) && index(target) <= index({year: now.getFullYear(), month: now.getMonth()});
+  }
+
+  selectCalendarDay(date: string): void {
+    this.calendarDay = date;
+    this.refreshStatsView();
+  }
+
+  /** Arrow keys move by day and week, Page Up/Down by month, as in a date picker. */
+  onCalendarKey(event: KeyboardEvent): void {
+    const steps: Record<string, number> = {ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7};
+    if (event.key === 'PageUp' || event.key === 'PageDown') {
+      event.preventDefault();
+      this.shiftCalendar(event.key === 'PageUp' ? -1 : 1);
+    } else if (event.key in steps) {
+      event.preventDefault();
+      const date = addDays(this.calendarDay, steps[event.key]);
+      const {year, month} = earliestMonth(this.stats.days);
+      if (date > localDateKey(new Date()) || date < localDateKey(new Date(year, month, 1))) {
+        return;
+      }
+      this.selectCalendarDay(date);
+    } else {
+      return;
+    }
+    setTimeout(() => document.getElementById('day-' + this.calendarDay)?.focus());
+  }
+
+  get calendarRoll(): DayRoll | null {
+    return this.stats.days.find(d => d.date === this.calendarDay) ?? null;
+  }
+
+  /** What a screen reader hears for a day: "Thursday, October 1, rolled 13, nudged from 4". */
+  calendarDayLabel(day: CalendarDay): string {
+    const date = dateFromKey(day.date).toLocaleDateString('en-US', {weekday: 'long', month: 'long', day: 'numeric'});
+    const r = day.roll;
+    return [
+      date,
+      day.isToday ? 'today' : '',
+      r ? `rolled ${r.value}${r.sides === 20 ? '' : ' on the d' + r.sides}` : day.isFuture ? '' : 'no roll',
+      day.tier === 'crit-success' ? 'natural top face' : day.tier === 'crit-fail' ? 'natural 1' : '',
+      r?.nudgedFrom ? `nudged from ${r.nudgedFrom.value}` : '',
+    ].filter(Boolean).join(', ');
   }
 
   setChartSides(sides: DieSides): void {
@@ -499,6 +573,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const die = dice.find(d => d.sides === this.chartSides) ?? dice.find(d => d.sides === this.prefs.sides) ?? dice[0] ?? null;
     this.statsView = {dice, die, bars: die ? chartBars(die.faces) : []};
     this.hoveredBar = null;
+    const [year, month] = this.calendarDay.split('-').map(Number);
+    this.calendar = this.statsTab === 'daily' ? calendarMonth(this.stats.days, year, month - 1) : null;
   }
 
   /** Shows the crack while a natural 1 is on the table or is the day's roll. */

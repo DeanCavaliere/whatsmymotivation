@@ -586,3 +586,194 @@ label.die-row:has(input:focus-visible) {
     font-size: 12px;
   }
 }
+
+/* ---------- Calendar (Stats › Daily) ---------- */
+
+.calendar {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 4px;
+}
+
+.calendar-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.calendar-head h3 {
+  margin: 0;
+}
+
+.calendar-summary {
+  margin: 2px 0 0;
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+
+.calendar-summary strong {
+  color: var(--ink);
+}
+
+.calendar-nav {
+  display: flex;
+  gap: 4px;
+}
+
+.calendar-nav .btn-icon {
+  font-size: 20px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.calendar-dow {
+  padding-bottom: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-align: center;
+  color: var(--ink-muted);
+}
+
+.calendar-day {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  height: clamp(40px, 11vw, 48px);
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  /* The result colors from the table, as a 14% tint that keeps every tier's number at 4.5:1. */
+  background: color-mix(in srgb, var(--tier) 14%, var(--surface-raised));
+  color: var(--tier);
+  font: inherit;
+  cursor: pointer;
+}
+
+.calendar-day.is-empty {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.calendar-day:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.calendar-day.is-today {
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+
+.calendar-day[aria-pressed="true"] {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.calendar-day:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.calendar-date {
+  position: absolute;
+  top: 3px;
+  left: 5px;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--ink-muted);
+}
+
+.calendar-value {
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.calendar-mark,
+.calendar-nudge {
+  position: absolute;
+  right: 4px;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.calendar-mark {
+  top: 3px;
+}
+
+.calendar-nudge {
+  bottom: 3px;
+}
+
+.calendar-crack {
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.calendar-legend li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.calendar-ramp {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.calendar-ramp i {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--tier);
+}
+
+.calendar-details {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.calendar-details h4 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.calendar-details p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+
+.calendar-details .calendar-details-roll {
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.calendar-details-roll strong {
+  font-size: 20px;
+  color: var(--tier, var(--ink));
+}

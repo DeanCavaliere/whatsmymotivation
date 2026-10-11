@@ -24,11 +24,9 @@ export const STATS_STORAGE = new InjectionToken<KeyValueStorage | null>('STATS_S
  * can still serve the previous version once, and it would drop fields it doesn't know.
  */
 export const STATS_KEY = 'wmm.stats.v2';
-/** d20-only stats, before per-die and daily tracking. Migrated on first load. */
-export const STATS_V1_KEY = 'wmm.stats.v1';
-export const LEGACY_LIFETIME_KEY = 'lifetimeRolls';
 export const HISTORY_LIMIT = 20;
-export const DAYS_LIMIT = 30;
+/** About a year and a month, so the calendar can page back a full year. */
+export const DAYS_LIMIT = 400;
 
 export interface RollRecord {
   value: number;
@@ -73,7 +71,7 @@ export interface Nudges {
 
 export interface Stats {
   version: 2;
-  /** Includes rolls made before per-face tracking existed, so it can exceed the tracked counts. */
+  /** Every roll, on any die. */
   lifetimeRolls: number;
   /** Every roll. */
   counts: FaceCounts;
@@ -163,27 +161,6 @@ export function streakAtRisk(stats: Stats, now: Date = new Date()): boolean {
   return stats.streak.lastDate === addDays(localDateKey(now), -1) && stats.streak.current > 0;
 }
 
-/** Rebuilds a streak from the days rolled, for data saved before streaks were tracked. */
-export function streakFromDates(dates: string[]): Streak {
-  const days = [...new Set(dates)].sort().reverse();
-  if (!days.length) {
-    return {current: 0, best: 0, lastDate: null};
-  }
-  let run = 1;
-  let best = 1;
-  let current = 0;
-  for (let i = 1; i <= days.length; i++) {
-    if (i < days.length && days[i] === addDays(days[i - 1], -1)) {
-      run++;
-      continue;
-    }
-    current ||= run;
-    best = Math.max(best, run);
-    run = 1;
-  }
-  return {current, best, lastDate: days[0]};
-}
-
 /** Each die that has rolls, in the order dice are offered. */
 export function dieSummaries(counts: FaceCounts): DieSummary[] {
   return DIE_SIDES.flatMap(sides => {
@@ -241,13 +218,12 @@ function sanitizeCounts(raw: unknown): FaceCounts {
 
 type Roll = Pick<RollRecord, 'value' | 'sides' | 'mode'>;
 
-/** Version 1 rolls had no `sides`: they were all d20s. */
 function sanitizeRoll(raw: unknown): (Roll & Record<string, unknown>) | null {
   if (!raw || typeof raw !== 'object') {
     return null;
   }
   const r = raw as Record<string, unknown>;
-  const sides = r['sides'] === undefined ? 20 : r['sides'];
+  const sides = r['sides'];
   if (!isDieSides(sides) || !isFace(r['value'], sides) || !isMode(r['mode'])) {
     return null;
   }
@@ -291,58 +267,26 @@ function sanitizeNudges(raw: unknown): Nudges {
   };
 }
 
-/** For version 1 data: each day's earliest roll still in history, plus the stored "today". */
-function daysFromHistory(history: RollRecord[], today: DayRoll | null): DayRoll[] {
-  const byDate = new Map<string, DayRoll>();
-  for (const h of history) {
-    // History is newest first, so later entries for the same date are earlier rolls.
-    const date = localDateKey(new Date(h.at));
-    byDate.set(date, {date, value: h.value, sides: h.sides, mode: h.mode});
-  }
-  if (today) {
-    byDate.set(today.date, today);
-  }
-  return [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date)).slice(0, DAYS_LIMIT);
-}
-
-function countsFromDays(days: DayRoll[]): FaceCounts {
-  const counts: FaceCounts = {};
-  days.forEach(d => bump(counts, d.sides, d.value));
-  return counts;
-}
-
-/**
- * Coerces anything read from storage into a valid Stats, dropping whatever is malformed.
- * Also upgrades version 1 data (d20 only, `faceCounts` and a single `today`).
- */
+/** Coerces anything read from storage into a valid Stats, dropping whatever is malformed. */
 export function sanitize(raw: unknown): Stats {
   const stats = emptyStats();
   if (!raw || typeof raw !== 'object') {
     return stats;
   }
   const r = raw as Record<string, unknown>;
-  stats.counts = r['counts'] !== undefined
-    ? sanitizeCounts(r['counts'])
-    : Array.isArray(r['faceCounts']) ? {20: sanitizeFaces(r['faceCounts'], 20)} : {};
-  stats.lifetimeRolls = Math.max(countTotals(stats.counts).rolls, isCount(r['lifetimeRolls']) ? Math.floor(r['lifetimeRolls']) : 0);
+  stats.counts = sanitizeCounts(r['counts']);
+  stats.lifetimeRolls = countTotals(stats.counts).rolls;
   if (Array.isArray(r['history'])) {
     stats.history = r['history'].map(sanitizeRecord).filter(h => !!h).slice(0, HISTORY_LIMIT);
   }
   if (Array.isArray(r['days'])) {
     stats.days = r['days'].map(sanitizeDay).filter(d => !!d).slice(0, DAYS_LIMIT);
-  } else {
-    stats.days = daysFromHistory(stats.history, sanitizeDay(r['today']));
   }
-  stats.dailyCounts = r['dailyCounts'] !== undefined ? sanitizeCounts(r['dailyCounts']) : countsFromDays(stats.days);
+  stats.dailyCounts = sanitizeCounts(r['dailyCounts']);
   const k = r['streak'] as Partial<Streak> | null | undefined;
   if (k && isCount(k.current) && isCount(k.best) && (k.lastDate === null || isDateKey(k.lastDate))) {
     const current = Math.floor(k.current);
     stats.streak = {current, best: Math.max(current, Math.floor(k.best)), lastDate: k.lastDate};
-  } else {
-    stats.streak = streakFromDates([
-      ...stats.days.map(d => d.date),
-      ...stats.history.map(h => localDateKey(new Date(h.at))),
-    ]);
   }
   stats.nudges = sanitizeNudges(r['nudges']);
   return stats;
@@ -364,11 +308,8 @@ export class StatsService {
       return emptyStats();
     }
     try {
-      const raw = this.storage.getItem(STATS_KEY) ?? this.storage.getItem(STATS_V1_KEY);
-      if (raw !== null) {
-        return sanitize(JSON.parse(raw));
-      }
-      return this.migrateLegacy();
+      const raw = this.storage.getItem(STATS_KEY);
+      return raw === null ? emptyStats() : sanitize(JSON.parse(raw));
     } catch {
       return emptyStats();
     }
@@ -439,12 +380,6 @@ export class StatsService {
   reset(): Stats {
     const stats = emptyStats();
     this.save(stats);
-    try {
-      this.storage?.removeItem(STATS_V1_KEY);
-      this.storage?.removeItem(LEGACY_LIFETIME_KEY);
-    } catch {
-      // Nothing else to clean up if storage is unavailable.
-    }
     return stats;
   }
 
@@ -460,15 +395,6 @@ export class StatsService {
     this.memory = structuredCloneStats(stats);
   }
 
-  /** The first versions stored only a lifetime counter under `lifetimeRolls`. */
-  private migrateLegacy(): Stats {
-    const stats = emptyStats();
-    const legacy = Number(JSON.parse(this.storage?.getItem(LEGACY_LIFETIME_KEY) ?? '0'));
-    if (isCount(legacy)) {
-      stats.lifetimeRolls = Math.floor(legacy);
-    }
-    return stats;
-  }
 }
 
 function structuredCloneStats(stats: Stats): Stats {

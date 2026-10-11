@@ -230,12 +230,68 @@ describe('AppComponent', () => {
 
       expect(el.querySelector('[role="tab"][aria-selected="true"]')!.textContent).toContain('Daily');
       expect(readout()).toContain('across 1 day on the d20');
-      expect(el.querySelectorAll('.history li').length).toBe(1);
+      expect(el.querySelectorAll('.calendar-day:not(.is-empty)').length).toBe(1);
 
       (el.querySelector('#tab-all') as HTMLButtonElement).click();
       fixture.detectChanges();
       expect(readout()).toContain('across 2 rolls on the d20');
       expect(el.querySelectorAll('.history li').length).toBe(2);
+    });
+  });
+
+  describe('the calendar', () => {
+    const el = () => fixture.nativeElement as HTMLElement;
+    const key = (k: string) => (el().querySelector('.calendar-day[tabindex="0"]') as HTMLElement)
+      .dispatchEvent(new KeyboardEvent('keydown', {key: k, bubbles: true}));
+
+    beforeEach(async () => {
+      vi.setSystemTime(new Date(2026, 9, 10, 9));
+      store.set(STATS_KEY, JSON.stringify({
+        days: [
+          {date: '2026-10-10', value: 17, sides: 20, mode: 'advantage', nudgedFrom: {value: 3, sides: 20}},
+          {date: '2026-10-08', value: 1, sides: 20, mode: 'normal'},
+          {date: '2026-09-20', value: 20, sides: 20, mode: 'normal'},
+        ],
+      }));
+      await setup();
+      app.openStats();
+      fixture.detectChanges();
+    });
+
+    afterEach(() => vi.useRealTimers());
+
+    it('opens on this month with today picked and the month summed up', () => {
+      expect(el().querySelector('#calendar-title')!.textContent).toBe('October 2026');
+      expect(el().querySelector('.calendar-summary')!.textContent!.replace(/\s+/g, ' ')).toContain('2 days rolled · average 9.0 · 0 crits');
+      expect(el().querySelector('.calendar-day[aria-pressed="true"]')!.getAttribute('aria-label'))
+        .toBe('Saturday, October 10, today, rolled 17, nudged from 3');
+      expect(el().querySelector('.calendar-details')!.textContent).toContain('Nudged from a 3.');
+    });
+
+    it('marks crits, crit fails and nudges', () => {
+      expect(el().querySelector('#day-2026-10-08 .calendar-crack')).not.toBeNull();
+      expect(el().querySelector('#day-2026-10-10 .calendar-nudge')).not.toBeNull();
+    });
+
+    it('moves by day and week with the arrow keys, but not into the future', () => {
+      key('ArrowRight');
+      expect(app.calendarDay).toBe('2026-10-10');
+      key('ArrowLeft');
+      key('ArrowLeft');
+      fixture.detectChanges();
+      expect(app.calendarDay).toBe('2026-10-08');
+      expect(el().querySelector('.calendar-details')!.textContent).toContain('Rolled 1 on the d20');
+      key('ArrowUp');
+      expect(app.calendarDay).toBe('2026-10-01');
+    });
+
+    it('pages back to the oldest month with rolls, and no further', () => {
+      expect(app.canShiftCalendar(1)).toBe(false);
+      app.shiftCalendar(-1);
+      fixture.detectChanges();
+      expect(el().querySelector('#calendar-title')!.textContent).toBe('September 2026');
+      expect(el().querySelector('#day-2026-09-20 .calendar-mark')!.textContent).toBe('★');
+      expect(app.canShiftCalendar(-1)).toBe(false);
     });
   });
 

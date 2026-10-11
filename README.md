@@ -12,7 +12,7 @@ Live at [whatsmymotivation.today](https://whatsmymotivation.today).
 - Daily streaks (current and best), with a nudge when today's roll would keep one going
 - Installable and works offline: a service worker (`ngsw-config.json`) caches the app, artwork and dice physics. It is only enabled in production builds
 - Pick your die (d4 to d20) in Settings (the cog button), with each one's odds of a crit, a good day and a bad day. Smaller dice are swingier; every die crits on its top face and fails on a 1
-- Stats stored in `localStorage`, in two tabs: daily rolls (each day's first roll: streaks, days rolled, distribution, recent days) and all rolls (lifetime/session counts, crits, distribution, recent rolls). Distributions are per die
+- Stats stored in `localStorage`, in two tabs: daily rolls (each day's first roll: streaks, days rolled, a month calendar going back about a year, distribution) and all rolls (lifetime/session counts, crits, distribution, recent rolls). Distributions are per die
 - Share the day's roll with a seven-day emoji strip and the streak (Web Share API, or copy to clipboard)
 - Nudge the table: once a week, re-roll today's roll. It comes back every Sunday, and the daily stats track how often nudges helped or backfired. Can be switched off in Settings
 - Accent colors (Copper, Arcane, Ember, Jade, Rose), table themes and dice colors (Settings). The felt is one neutral texture tinted with CSS `background-blend-mode`, so a new table color is a one-line addition to `prefs.service.ts`

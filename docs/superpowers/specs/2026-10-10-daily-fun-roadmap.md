@@ -78,9 +78,11 @@ Chunk 2 comes early because Halloween (October) is three weeks away.
 - **History length:** `DAYS_LIMIT` goes from 30 to 400.
 - **Where:** Stats → Daily tab gets a month grid, with previous- and next-month arrows. The current month opens by default.
 - **Each day cell:**
-  - shaded with an accent ramp, darker for better rolls;
+  - shaded with the result's tier color (the same colors as the number on the table) as a 14% tint, with the number in the tier color; every tier passes 4.5:1;
   - ★ for a natural 20, a crack mark for a natural 1;
   - small marks for a finished quest and for a note, once chunk 8 lands.
+- **Month line:** under the month name, e.g. "9 days rolled · average 12.0 · 1 crit" (the average is left out when the month mixes dice).
+- **Replaces** the "Recent days" list.
 - **Interaction:** day cells are buttons. Arrow keys move around the grid, and each day's `aria-label` reads its date, roll and tier. Tapping a day shows its details below the grid: the roll, mode, die, whether it was rerolled, the condition, the quest and the note.
 
 ### 4. Sound and haptics
@@ -139,7 +141,7 @@ The two become one mechanic: **Reroll** replaces today's roll, and it has two so
 **Settings and stats:**
 
 - The existing nudge switch becomes "Rerolls (weekly nudge and Inspiration)".
-- Rerolled days are marked in the stats and the calendar, as nudged days are today.
+- Rerolled days are marked in the stats and the calendar: ↻ for the free weekly nudge, ✦ for a reroll paid with Inspiration. Day records store which one was used.
 - New badges: Hoarder (hold 3 ✦), Big spender (spend 5 ✦), Lucky nudge (a reroll turns a 1 into the top face).
 
 ### 7. Daily table conditions
